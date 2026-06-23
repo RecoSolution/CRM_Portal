@@ -4,6 +4,7 @@ const noteSchema = new mongoose.Schema(
   {
     content: { type: String, required: true },
     type: { type: String, enum: ['text', 'voice'], default: 'text' },
+    audioUrl: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true },
@@ -48,8 +49,18 @@ const contactSchema = new mongoose.Schema(
     // ── Classification ──────────────────────
     relationshipType: {
       type: String,
-      enum: ['lead', 'vendor', 'partner', 'other'],
+      enum: [
+        'lead',
+        'vendor',
+        'customer',
+        'partner',
+        'team',
+        'investor',
+        'general',
+        '',
+      ],
       default: 'lead',
+      set: (v) => v || 'lead',
     },
     category: { type: String, default: '' },
     tags: [{ type: String }],
@@ -79,6 +90,21 @@ const contactSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'done', 'skipped'],
       default: 'pending',
+    },
+
+    currentStage: {
+      type: String,
+      enum: [
+        'new_contact',
+        'follow_up_due',
+        'negotiation',
+        'quotation_sent',
+        'quotation_pending',
+        'closed',
+        '',
+      ],
+      default: 'new_contact',
+      set: (v) => v || 'new_contact',
     },
 
     // ── Folder ──────────────────────────────
