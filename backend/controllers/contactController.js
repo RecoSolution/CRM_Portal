@@ -19,8 +19,14 @@ const getContacts = asyncHandler(async (req, res) => {
 
   // Text search
   if (search) {
-    query.$text = { $search: search }
-  }
+  const regex = new RegExp(search, 'i'); // case-insensitive partial match
+  query.$or = [
+    { name: regex },
+    { company: regex },
+    { email: regex },
+    { phone: regex },
+  ];
+}
 
   const skip  = (page - 1) * limit
   const total = await Contact.countDocuments(query)
