@@ -82,32 +82,30 @@ async function extractContactFromText(rawText) {
 // Calls Google Cloud Vision's TEXT_DETECTION endpoint.
 // Vision handles rotation, skew, and low-quality images internally -
 // no manual rotation loop or image preprocessing needed anymore.
-async function recognizeWithVision(base64Image) {
-  const res = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: [
-          {
-            image: { content: base64Image },
-            features: [{ type: 'TEXT_DETECTION' }],
-          },
-        ],
-      }),
-    },
-  );
+// Calls OCR.space's API - free tier, no credit card required.
+// Sends the image as base64, gets back recognized text.
+async function recognizeWithOcrSpace(base64Image, mimetype) {
+  const formData = new URLSearchParams();
+  formData.append('apikey', process.env.OCRSPACE_API_KEY);
+  formData.append('base64Image', `data:${mimetype};base64,${base64Image}`);
+  formData.append('language', 'eng');
+  formData.append('OCREngine', '2'); // engine 2 = better accuracy for photos/cards
+  formData.append('scale', 'true');  // auto-upscales small images
+  formData.append('detectOrientation', 'true'); // auto-rotates if needed
+
+  const res = await fetch('https://api.ocr.space/parse/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData.toString(),
+  });
 
   const data = await res.json();
 
-  if (data.error) {
-    throw new Error(`Google Vision error: ${data.error.message}`);
+  if (data.IsErroredOnProcessing) {
+    throw new Error(`OCR.space error: ${data.ErrorMessage?.join(', ') || 'Unknown error'}`);
   }
 
-  const annotation = data.responses?.[0]?.fullTextAnnotation;
-  const text = annotation?.text?.trim() || '';
-
+  const text = data.ParsedResults?.[0]?.ParsedText?.trim() || '';
   return { text };
 }
 
@@ -245,16 +243,16 @@ const scanCard = asyncHandler(async (req, res) => {
 
   // ── Step 2: Run OCR using Google Cloud Vision (handles rotation/quality internally) ──
   let rawText = '';
-  try {
-    const result = await recognizeWithVision(base64Image);
-    rawText = result.text;
-  } catch (err) {
-    console.error('Google Vision OCR failed:', err.message);
-    return res.status(502).json({
-      success: false,
-      message: 'OCR service is temporarily unavailable. Please try again in a moment.',
-    });
-  }
+try {
+  const result = await recognizeWithOcrSpace(base64Image, req.file.mimetype);
+  rawText = result.text;
+} catch (err) {
+  console.error('OCR.space failed:', err.message);
+  return res.status(502).json({
+    success: false,
+    message: 'OCR service is temporarily unavailable. Please try again in a moment.',
+  });
+}
 
   if (!rawText) {
     return res.status(400).json({
