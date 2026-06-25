@@ -1,11 +1,6 @@
 import asyncHandler from '../utils/asyncHandler.js';
 import cloudinary from '../config/cloudinary.js';
 import Contact from '../models/Contact.js';
-
-// ════════════════════════════════════════════════════════
-// AI CODE (Gemini) - COMMENTED OUT, kept for future re-enable
-// ════════════════════════════════════════════════════════
-
 /*
 async function callGemini(prompt) {
   const res = await fetch(
