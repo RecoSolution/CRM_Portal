@@ -205,7 +205,7 @@ export default function Home() {
                 <img
                   src='/assets/icons/tab-home.svg'
                   alt=''
-                  className='w-5 h-5 opacity-70'
+                  className='w-5 h-5 opacity-70 '
                 />
                 <span className='text-[14px] font-medium text-gray-800'>
                   Home

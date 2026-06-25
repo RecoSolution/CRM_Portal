@@ -1,6 +1,7 @@
 import asyncHandler from '../utils/asyncHandler.js';
 import cloudinary from '../config/cloudinary.js';
 import Contact from '../models/Contact.js';
+
 /*
 async function callGemini(prompt) {
   const res = await fetch(
@@ -45,7 +46,7 @@ function classifyGeminiError(rawMessage) {
 }
 
 function buildExtractionPrompt(rawText) {
-  return `Extract contact information from this business card text...`; // (original prompt)
+  return `Extract contact information from this business card text...`;
 }
 
 function parseAIJson(text, fallback = {}) {
@@ -71,22 +72,17 @@ async function extractContactFromText(rawText) {
 */
 
 // ════════════════════════════════════════════════════════
-// ACTIVE: Google Cloud Vision OCR (replaces Tesseract)
+// ACTIVE: OCR.space (free, no card required)
 // ════════════════════════════════════════════════════════
 
-// Calls Google Cloud Vision's TEXT_DETECTION endpoint.
-// Vision handles rotation, skew, and low-quality images internally -
-// no manual rotation loop or image preprocessing needed anymore.
-// Calls OCR.space's API - free tier, no credit card required.
-// Sends the image as base64, gets back recognized text.
 async function recognizeWithOcrSpace(base64Image, mimetype) {
   const formData = new URLSearchParams();
   formData.append('apikey', process.env.OCRSPACE_API_KEY);
   formData.append('base64Image', `data:${mimetype};base64,${base64Image}`);
   formData.append('language', 'eng');
-  formData.append('OCREngine', '2'); // engine 2 = better accuracy for photos/cards
-  formData.append('scale', 'true');  // auto-upscales small images
-  formData.append('detectOrientation', 'true'); // auto-rotates if needed
+  formData.append('OCREngine', '2');
+  formData.append('scale', 'true');
+  formData.append('detectOrientation', 'true');
 
   const res = await fetch('https://api.ocr.space/parse/image', {
     method: 'POST',
@@ -105,8 +101,7 @@ async function recognizeWithOcrSpace(base64Image, mimetype) {
 }
 
 // ════════════════════════════════════════════════════════
-// Pattern-matching extraction (no AI) - unchanged from before,
-// now operating on much cleaner Vision OCR output instead of Tesseract's.
+// Pattern-matching extraction (no AI)
 // ════════════════════════════════════════════════════════
 
 const TITLE_KEYWORDS = [
@@ -129,6 +124,18 @@ const NAME_HINTS = [
   'goel', 'goyal', 'mittal', 'bansal', 'saxena', 'tiwari', 'dubey',
 ];
 
+// Common consumer email providers - never treat these as a "website"
+const COMMON_EMAIL_DOMAINS = [
+  'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com',
+  'rediffmail.com', 'icloud.com', 'live.com', 'aol.com',
+];
+
+// Company name suffixes / keywords - helps detect company lines without AI
+const COMPANY_SUFFIXES = [
+  'pvt', 'ltd', 'llp', 'inc', 'corp', 'co.', 'company',
+  'enterprises', 'industries', 'solutions', 'group', 'international',
+];
+
 function looksLikeName(line) {
   const words = line.trim().split(/\s+/);
   const wordCount = words.length;
@@ -141,6 +148,9 @@ function looksLikeName(line) {
   return true;
 }
 
+// Extracts email/phone/website using fixed patterns.
+// Website search excludes the matched email AND known consumer email
+// domains, so "gmail.com" can never be picked up as a website by mistake.
 function regexExtractBasicFields(text) {
   const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   const email = emailMatch ? emailMatch[0] : '';
@@ -148,13 +158,36 @@ function regexExtractBasicFields(text) {
   const textWithoutEmail = email ? text.replace(email, '') : text;
 
   const phoneMatch = text.match(/(\+?\d[\d\s-]{8,}\d)/);
-  const websiteMatch = textWithoutEmail.match(/\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|in|net|org|co)\b/i);
+
+  const websiteMatches = textWithoutEmail.match(/\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|in|net|org|co)\b/gi) || [];
+  const validWebsite = websiteMatches.find(
+    (w) => !COMMON_EMAIL_DOMAINS.includes(w.toLowerCase()),
+  );
 
   return {
     email,
     phone: phoneMatch ? phoneMatch[0].trim() : '',
-    website: websiteMatch ? websiteMatch[0] : '',
+    website: validWebsite || '',
   };
+}
+
+// Guesses a company name using two heuristics:
+// 1. A line containing a company suffix (Pvt Ltd, LLP, Inc, etc.)
+// 2. An ALL-CAPS line (often the logo/brand text in OCR output) that
+//    isn't the designation line itself
+function guessCompany(lines, designationIndex) {
+  const suffixLine = lines.find((l) =>
+    COMPANY_SUFFIXES.some((suffix) => l.toLowerCase().includes(suffix)),
+  );
+  if (suffixLine) return suffixLine;
+
+  const allCapsLine = lines.find((l, i) => {
+    const isAllCaps = l === l.toUpperCase() && /[A-Z]/.test(l);
+    const isLongEnough = l.length > 3 && l.length < 40;
+    return isAllCaps && isLongEnough && i !== designationIndex;
+  });
+
+  return allCapsLine || '';
 }
 
 function heuristicExtract(rawText) {
@@ -199,7 +232,9 @@ function heuristicExtract(rawText) {
     }
   }
 
-  return { name, designation, address };
+  const company = guessCompany(lines, designationIndex);
+
+  return { name, designation, address, company };
 }
 
 function extractContactFields(rawText) {
@@ -210,7 +245,7 @@ function extractContactFields(rawText) {
     name: heuristics.name,
     designation: heuristics.designation,
     address: heuristics.address,
-    company: '',
+    company: heuristics.company,
     email: basics.email,
     phone: basics.phone,
     website: basics.website,
@@ -219,7 +254,7 @@ function extractContactFields(rawText) {
 
 // ────────────────────────────────────────────────────────
 // @route   POST /api/scan/ocr
-// @desc    Upload card image → Google Vision OCR → pattern-match extraction
+// @desc    Upload card image → OCR.space → pattern-match extraction
 // @access  Private
 // ────────────────────────────────────────────────────────
 const scanCard = asyncHandler(async (req, res) => {
@@ -227,7 +262,6 @@ const scanCard = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please upload an image.' });
   }
 
-  // ── Step 1: Upload image to Cloudinary ──────────────
   const base64Image = req.file.buffer.toString('base64');
   const dataUri = `data:${req.file.mimetype};base64,${base64Image}`;
 
@@ -236,18 +270,17 @@ const scanCard = asyncHandler(async (req, res) => {
   });
   const imageUrl = uploadResult.secure_url;
 
-  // ── Step 2: Run OCR using Google Cloud Vision (handles rotation/quality internally) ──
   let rawText = '';
-try {
-  const result = await recognizeWithOcrSpace(base64Image, req.file.mimetype);
-  rawText = result.text;
-} catch (err) {
-  console.error('OCR.space failed:', err.message);
-  return res.status(502).json({
-    success: false,
-    message: 'OCR service is temporarily unavailable. Please try again in a moment.',
-  });
-}
+  try {
+    const result = await recognizeWithOcrSpace(base64Image, req.file.mimetype);
+    rawText = result.text;
+  } catch (err) {
+    console.error('OCR.space failed:', err.message);
+    return res.status(502).json({
+      success: false,
+      message: 'OCR service is temporarily unavailable. Please try again in a moment.',
+    });
+  }
 
   if (!rawText) {
     return res.status(400).json({
@@ -256,7 +289,6 @@ try {
     });
   }
 
-  // ── Step 3: Extract fields using pattern-matching (no AI) ──
   const extractedContact = extractContactFields(rawText);
 
   res.json({
@@ -312,7 +344,6 @@ const uploadVoiceNote = asyncHandler(async (req, res) => {
 
 // ────────────────────────────────────────────────────────
 // @route   POST /api/scan/retry-extraction
-// @desc    Re-runs pattern-match extraction on already-scanned raw text
 // @access  Private
 // ────────────────────────────────────────────────────────
 const retryExtraction = asyncHandler(async (req, res) => {
