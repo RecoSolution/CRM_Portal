@@ -1,119 +1,141 @@
 import asyncHandler from '../utils/asyncHandler.js';
 import cloudinary from '../config/cloudinary.js';
 import Contact from '../models/Contact.js';
-import Tesseract from 'tesseract.js';
-import sharp from 'sharp';
 
-// Common job title / designation keywords
+// ════════════════════════════════════════════════════════
+// AI CODE (Gemini) - COMMENTED OUT, kept for future re-enable
+// ════════════════════════════════════════════════════════
+
+/*
+async function callGemini(prompt) {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    },
+  );
+  const data = await res.json();
+  if (data.error) throw new Error(`Gemini error: ${data.error.message}`);
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+}
+
+async function callGeminiWithRetry(prompt, maxRetries = 2) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await callGemini(prompt);
+    } catch (err) {
+      lastError = err;
+      const msg = err.message.toLowerCase();
+      const isRetryable = msg.includes('high demand') || msg.includes('overloaded') || msg.includes('503') || msg.includes('429') || msg.includes('quota');
+      if (!isRetryable || attempt === maxRetries) break;
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+function classifyGeminiError(rawMessage) {
+  const msg = rawMessage || '';
+  const lower = msg.toLowerCase();
+  if (lower.includes('quota') || msg.includes('429') || lower.includes('too many requests')) {
+    return 'AI service rate limit reached on our end. Please wait about a minute and tap Retry AI Extraction.';
+  }
+  if (lower.includes('high demand') || msg.includes('503') || lower.includes('overloaded')) {
+    return "AI service is temporarily overloaded on Google's side (not your account). Please wait a few minutes and tap Retry AI Extraction.";
+  }
+  return `AI extraction failed: ${msg}`;
+}
+
+function buildExtractionPrompt(rawText) {
+  return `Extract contact information from this business card text...`; // (original prompt)
+}
+
+function parseAIJson(text, fallback = {}) {
+  try {
+    return JSON.parse(text.replace(/```json|```/g, '').trim());
+  } catch {
+    return fallback;
+  }
+}
+
+async function extractContactFromText(rawText) {
+  let extractedContact = { name: '', company: '', designation: '', email: '', phone: '', website: '', address: '' };
+  let aiError = null;
+  try {
+    const aiText = await callGeminiWithRetry(buildExtractionPrompt(rawText));
+    extractedContact = parseAIJson(aiText, extractedContact);
+  } catch (err) {
+    aiError = classifyGeminiError(err.message);
+    extractedContact = { ...extractedContact, ...regexExtractBasicFields(rawText) };
+  }
+  return { extractedContact, aiError };
+}
+*/
+
+// ════════════════════════════════════════════════════════
+// ACTIVE: Google Cloud Vision OCR (replaces Tesseract)
+// ════════════════════════════════════════════════════════
+
+// Calls Google Cloud Vision's TEXT_DETECTION endpoint.
+// Vision handles rotation, skew, and low-quality images internally -
+// no manual rotation loop or image preprocessing needed anymore.
+async function recognizeWithVision(base64Image) {
+  const res = await fetch(
+    `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [
+          {
+            image: { content: base64Image },
+            features: [{ type: 'TEXT_DETECTION' }],
+          },
+        ],
+      }),
+    },
+  );
+
+  const data = await res.json();
+
+  if (data.error) {
+    throw new Error(`Google Vision error: ${data.error.message}`);
+  }
+
+  const annotation = data.responses?.[0]?.fullTextAnnotation;
+  const text = annotation?.text?.trim() || '';
+
+  return { text };
+}
+
+// ════════════════════════════════════════════════════════
+// Pattern-matching extraction (no AI) - unchanged from before,
+// now operating on much cleaner Vision OCR output instead of Tesseract's.
+// ════════════════════════════════════════════════════════
+
 const TITLE_KEYWORDS = [
-  'ceo',
-  'cfo',
-  'cto',
-  'coo',
-  'founder',
-  'co-founder',
-  'cofounder',
-  'director',
-  'manager',
-  'president',
-  'vice president',
-  'vp',
-  'executive',
-  'head',
-  'owner',
-  'partner',
-  'consultant',
-  'engineer',
-  'designer',
-  'analyst',
-  'specialist',
-  'lead',
-  'supervisor',
-  'coordinator',
-  'officer',
-  'administrator',
-  'proprietor',
-  'chairman',
-  'chairperson',
-  'principal',
-  'associate',
-  'sales',
-  'marketing',
-  'operations',
-  'finance',
-  'hr',
-  'human resources',
-  'business development',
+  'ceo', 'cfo', 'cto', 'coo', 'founder', 'co-founder', 'cofounder', 'director',
+  'manager', 'president', 'vice president', 'vp', 'executive', 'head', 'owner',
+  'partner', 'consultant', 'engineer', 'designer', 'analyst', 'specialist',
+  'lead', 'supervisor', 'coordinator', 'officer', 'administrator', 'proprietor',
+  'chairman', 'chairperson', 'principal', 'associate', 'sales', 'marketing',
+  'operations', 'finance', 'hr', 'human resources', 'business development',
 ];
 
-// Common Indian/international surnames and name-prefixes/suffixes,
-// used to help confirm a line is a person's name (not a company/tagline).
 const NAME_HINTS = [
-  // Common honorifics/prefixes
-  'mr',
-  'mrs',
-  'ms',
-  'dr',
-  'prof',
-  'shri',
-  'smt',
-  // Common surnames (expand this list anytime - more entries = better detection)
-  'patel',
-  'shah',
-  'desai',
-  'mehta',
-  'gandhi',
-  'sharma',
-  'verma',
-  'gupta',
-  'singh',
-  'kumar',
-  'reddy',
-  'nair',
-  'iyer',
-  'rao',
-  'joshi',
-  'agarwal',
-  'jain',
-  'bhatt',
-  'trivedi',
-  'pandey',
-  'mishra',
-  'chawla',
-  'malhotra',
-  'kapoor',
-  'khanna',
-  'chopra',
-  'bose',
-  'banerjee',
-  'mukherjee',
-  'das',
-  'pillai',
-  'menon',
-  'naidu',
-  'rajan',
-  'kulkarni',
-  'deshmukh',
-  'jadhav',
-  'thakur',
-  'yadav',
-  'chauhan',
-  'rathore',
-  'bhatia',
-  'arora',
-  'sethi',
-  'goel',
-  'goyal',
-  'mittal',
-  'bansal',
-  'saxena',
-  'tiwari',
-  'dubey',
+  'mr', 'mrs', 'ms', 'dr', 'prof', 'shri', 'smt',
+  'patel', 'shah', 'desai', 'mehta', 'gandhi', 'sharma', 'verma', 'gupta',
+  'singh', 'kumar', 'reddy', 'nair', 'iyer', 'rao', 'joshi', 'agarwal',
+  'jain', 'bhatt', 'trivedi', 'pandey', 'mishra', 'chawla', 'malhotra',
+  'kapoor', 'khanna', 'chopra', 'bose', 'banerjee', 'mukherjee', 'das',
+  'pillai', 'menon', 'naidu', 'rajan', 'kulkarni', 'deshmukh', 'jadhav',
+  'thakur', 'yadav', 'chauhan', 'rathore', 'bhatia', 'arora', 'sethi',
+  'goel', 'goyal', 'mittal', 'bansal', 'saxena', 'tiwari', 'dubey',
 ];
 
-// Helper: does this line look like a person's name?
-// (2-4 words, mostly letters, no digits/symbols, reasonably short,
-// optionally matches a known surname/honorific for extra confidence)
 function looksLikeName(line) {
   const words = line.trim().split(/\s+/);
   const wordCount = words.length;
@@ -123,31 +145,17 @@ function looksLikeName(line) {
 
   if (hasDigits || hasSymbols || !isReasonableLength) return false;
   if (wordCount < 2 || wordCount > 4) return false;
-
-  // Bonus confidence check (not required, just helps when ambiguous)
-  const lower = line.toLowerCase();
-  const matchesNameHint = NAME_HINTS.some((hint) => lower.includes(hint));
-
-  return true || matchesNameHint; // structural check is enough; hint is a bonus signal only
+  return true;
 }
 
-// Helper: regex-based extraction for email, phone, website -
-// these have fixed, reliable patterns, so they stay accurate
-// regardless of card layout or font style.
 function regexExtractBasicFields(text) {
-  const emailMatch = text.match(
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
-  );
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   const email = emailMatch ? emailMatch[0] : '';
 
-  // Remove the matched email from the text before searching for a website,
-  // so the website regex doesn't accidentally match the domain inside the email
   const textWithoutEmail = email ? text.replace(email, '') : text;
 
   const phoneMatch = text.match(/(\+?\d[\d\s-]{8,}\d)/);
-  const websiteMatch = textWithoutEmail.match(
-    /\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|in|net|org|co)\b/i,
-  );
+  const websiteMatch = textWithoutEmail.match(/\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|in|net|org|co)\b/i);
 
   return {
     email,
@@ -156,8 +164,6 @@ function regexExtractBasicFields(text) {
   };
 }
 
-// Helper: heuristic extraction for name, designation, address -
-// uses line position and keyword/pattern matching. No AI involved.
 function heuristicExtract(rawText) {
   const lines = rawText
     .split('\n')
@@ -168,7 +174,6 @@ function heuristicExtract(rawText) {
   let designation = '';
   let address = '';
 
-  // ── Designation: first line containing a known title keyword ──
   let designationIndex = -1;
   for (let i = 0; i < lines.length; i++) {
     const lower = lines[i].toLowerCase();
@@ -179,11 +184,7 @@ function heuristicExtract(rawText) {
     }
   }
 
-  // ── Name: prefer the line right before designation if it looks like a name,
-  //    otherwise scan all lines for the first name-like candidate,
-  //    preferring ones that match a known surname/honorific ──
   let nameCandidate = '';
-
   if (designationIndex > 0 && looksLikeName(lines[designationIndex - 1])) {
     nameCandidate = lines[designationIndex - 1];
   } else {
@@ -193,10 +194,8 @@ function heuristicExtract(rawText) {
     );
     nameCandidate = withSurnameHint || candidates[0] || '';
   }
-
   name = nameCandidate;
 
-  // ── Address: line with a PIN/ZIP code + comma, or longest comma-heavy line ──
   const pinCodeLine = lines.find((l) => /\b\d{5,6}\b/.test(l) && /,/.test(l));
   if (pinCodeLine) {
     address = pinCodeLine;
@@ -210,10 +209,6 @@ function heuristicExtract(rawText) {
   return { name, designation, address };
 }
 
-// Combines regex (email/phone/website) + heuristics (name/designation/address)
-// into the full contact shape the frontend expects. Company is intentionally
-// left blank - no reliable text pattern exists for "this is a company name"
-// without understanding context, so it's always filled in manually.
 function extractContactFields(rawText) {
   const basics = regexExtractBasicFields(rawText);
   const heuristics = heuristicExtract(rawText);
@@ -229,64 +224,14 @@ function extractContactFields(rawText) {
   };
 }
 
-// Helper: preprocess image to improve OCR accuracy
-// (grayscale + contrast boost + sharpen - helps with stylized fonts,
-// background textures, and low-quality photos)
-async function preprocessForOCR(buffer) {
-  return sharp(buffer)
-    .resize({ width: 1600, withoutEnlargement: false })
-    .greyscale()
-    .normalize()
-    .sharpen()
-    .toBuffer();
-}
-
-async function recognizeWithRotation(buffer) {
-  const preprocessed = await preprocessForOCR(buffer);
-
-  // Try the straight orientation first - this is correct most of the time
-  const straightResult = await Tesseract.recognize(preprocessed, 'eng');
-  const straightText = straightResult.data.text.trim();
-  const straightConfidence = straightResult.data.confidence;
-
-  // If the result looks reasonably good, stop here - don't waste time
-  // trying other rotations. "Good enough" = some real text with decent confidence.
-  const looksGoodEnough = straightText.length > 15 && straightConfidence > 40;
-
-  if (looksGoodEnough) {
-    return { text: straightText, confidence: straightConfidence, angle: 0 };
-  }
-
-  // Otherwise, the card might be rotated - try the other 3 angles
-  let best = { text: straightText, confidence: straightConfidence, angle: 0 };
-
-  for (const angle of [90, 180, 270]) {
-    const rotatedBuffer = await sharp(preprocessed).rotate(angle).toBuffer();
-    const result = await Tesseract.recognize(rotatedBuffer, 'eng');
-    const confidence = result.data.confidence;
-    const text = result.data.text.trim();
-
-    if (
-      confidence > best.confidence ||
-      (confidence === best.confidence && text.length > best.text.length)
-    ) {
-      best = { text, confidence, angle };
-    }
-  }
-
-  return best;
-}
-
 // ────────────────────────────────────────────────────────
 // @route   POST /api/scan/ocr
-// @desc    Upload card image → Tesseract OCR → pattern-match extraction (no AI)
+// @desc    Upload card image → Google Vision OCR → pattern-match extraction
 // @access  Private
 // ────────────────────────────────────────────────────────
 const scanCard = asyncHandler(async (req, res) => {
   if (!req.file) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'Please upload an image.' });
+    return res.status(400).json({ success: false, message: 'Please upload an image.' });
   }
 
   // ── Step 1: Upload image to Cloudinary ──────────────
@@ -298,9 +243,18 @@ const scanCard = asyncHandler(async (req, res) => {
   });
   const imageUrl = uploadResult.secure_url;
 
-  // ── Step 2: Run OCR using Tesseract.js, trying multiple rotations ──
-  const best = await recognizeWithRotation(req.file.buffer);
-  const rawText = best.text;
+  // ── Step 2: Run OCR using Google Cloud Vision (handles rotation/quality internally) ──
+  let rawText = '';
+  try {
+    const result = await recognizeWithVision(base64Image);
+    rawText = result.text;
+  } catch (err) {
+    console.error('Google Vision OCR failed:', err.message);
+    return res.status(502).json({
+      success: false,
+      message: 'OCR service is temporarily unavailable. Please try again in a moment.',
+    });
+  }
 
   if (!rawText) {
     return res.status(400).json({
@@ -309,7 +263,7 @@ const scanCard = asyncHandler(async (req, res) => {
     });
   }
 
-  // ── Step 3: Extract fields using pattern-matching (NO AI, NO API calls) ──
+  // ── Step 3: Extract fields using pattern-matching (no AI) ──
   const extractedContact = extractContactFields(rawText);
 
   res.json({
@@ -317,14 +271,13 @@ const scanCard = asyncHandler(async (req, res) => {
     rawText,
     extractedContact,
     cardImageUrl: imageUrl,
-    aiError: null, // no AI is used, so this is always null now
+    aiError: null,
   });
 });
 
 // ────────────────────────────────────────────────────────
 // @route   POST /api/scan/ai-summary
-// @desc    DISABLED - was Gemini-based lead summary/scoring.
-//          Returns safe defaults so existing frontend calls don't break.
+// @desc    DISABLED (AI-based) - returns existing/safe values
 // @access  Private
 // ────────────────────────────────────────────────────────
 const generateAISummary = asyncHandler(async (req, res) => {
@@ -333,41 +286,24 @@ const generateAISummary = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({ _id: contactId, owner: req.user.id });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
-  // AI summary disabled - leave existing values untouched, just confirm success
   res.json({
     success: true,
     summary: contact.aiSummary || '',
     leadScore: contact.leadScore || 0,
     leadCategory: contact.leadCategory || 'cold',
   });
-
-  /* ── Original AI-based version (commented out) ──
-  const prompt = `You are a sales assistant for RecoSolution...`;
-  const aiText = await callGeminiWithRetry(prompt);
-  const result = parseAIJson(aiText, { summary: '', leadScore: 0, leadCategory: 'cold' });
-  contact.aiSummary = result.summary;
-  contact.leadScore = result.leadScore;
-  contact.leadCategory = result.leadCategory;
-  await contact.save();
-  res.json({ success: true, ...result });
-  */
 });
 
 // ────────────────────────────────────────────────────────
 // @route   POST /api/scan/upload-voice
-// @desc    Upload a recorded voice note audio file to Cloudinary
 // @access  Private
 // ────────────────────────────────────────────────────────
 const uploadVoiceNote = asyncHandler(async (req, res) => {
   if (!req.file) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'No audio file provided.' });
+    return res.status(400).json({ success: false, message: 'No audio file provided.' });
   }
 
   const base64Audio = req.file.buffer.toString('base64');
@@ -383,19 +319,14 @@ const uploadVoiceNote = asyncHandler(async (req, res) => {
 
 // ────────────────────────────────────────────────────────
 // @route   POST /api/scan/retry-extraction
-// @desc    Re-runs pattern-match extraction on already-scanned raw text.
-//          No longer needed for AI retries, but kept so the frontend's
-//          existing "Retry" button still works (re-runs heuristics,
-//          useful if extraction logic improves and user wants a re-try).
+// @desc    Re-runs pattern-match extraction on already-scanned raw text
 // @access  Private
 // ────────────────────────────────────────────────────────
 const retryExtraction = asyncHandler(async (req, res) => {
   const { rawText } = req.body;
 
   if (!rawText) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'No raw text provided.' });
+    return res.status(400).json({ success: false, message: 'No raw text provided.' });
   }
 
   const extractedContact = extractContactFields(rawText);
