@@ -6,27 +6,109 @@ import sharp from 'sharp';
 
 // Common job title / designation keywords
 const TITLE_KEYWORDS = [
-  'ceo', 'cfo', 'cto', 'coo', 'founder', 'co-founder', 'cofounder', 'director',
-  'manager', 'president', 'vice president', 'vp', 'executive', 'head', 'owner',
-  'partner', 'consultant', 'engineer', 'designer', 'analyst', 'specialist',
-  'lead', 'supervisor', 'coordinator', 'officer', 'administrator', 'proprietor',
-  'chairman', 'chairperson', 'principal', 'associate', 'sales', 'marketing',
-  'operations', 'finance', 'hr', 'human resources', 'business development',
+  'ceo',
+  'cfo',
+  'cto',
+  'coo',
+  'founder',
+  'co-founder',
+  'cofounder',
+  'director',
+  'manager',
+  'president',
+  'vice president',
+  'vp',
+  'executive',
+  'head',
+  'owner',
+  'partner',
+  'consultant',
+  'engineer',
+  'designer',
+  'analyst',
+  'specialist',
+  'lead',
+  'supervisor',
+  'coordinator',
+  'officer',
+  'administrator',
+  'proprietor',
+  'chairman',
+  'chairperson',
+  'principal',
+  'associate',
+  'sales',
+  'marketing',
+  'operations',
+  'finance',
+  'hr',
+  'human resources',
+  'business development',
 ];
 
 // Common Indian/international surnames and name-prefixes/suffixes,
 // used to help confirm a line is a person's name (not a company/tagline).
 const NAME_HINTS = [
   // Common honorifics/prefixes
-  'mr', 'mrs', 'ms', 'dr', 'prof', 'shri', 'smt',
+  'mr',
+  'mrs',
+  'ms',
+  'dr',
+  'prof',
+  'shri',
+  'smt',
   // Common surnames (expand this list anytime - more entries = better detection)
-  'patel', 'shah', 'desai', 'mehta', 'gandhi', 'sharma', 'verma', 'gupta',
-  'singh', 'kumar', 'reddy', 'nair', 'iyer', 'rao', 'joshi', 'agarwal',
-  'jain', 'bhatt', 'trivedi', 'pandey', 'mishra', 'chawla', 'malhotra',
-  'kapoor', 'khanna', 'chopra', 'bose', 'banerjee', 'mukherjee', 'das',
-  'pillai', 'menon', 'naidu', 'rajan', 'kulkarni', 'deshmukh', 'jadhav',
-  'thakur', 'yadav', 'chauhan', 'rathore', 'bhatia', 'arora', 'sethi',
-  'goel', 'goyal', 'mittal', 'bansal', 'saxena', 'tiwari', 'dubey',
+  'patel',
+  'shah',
+  'desai',
+  'mehta',
+  'gandhi',
+  'sharma',
+  'verma',
+  'gupta',
+  'singh',
+  'kumar',
+  'reddy',
+  'nair',
+  'iyer',
+  'rao',
+  'joshi',
+  'agarwal',
+  'jain',
+  'bhatt',
+  'trivedi',
+  'pandey',
+  'mishra',
+  'chawla',
+  'malhotra',
+  'kapoor',
+  'khanna',
+  'chopra',
+  'bose',
+  'banerjee',
+  'mukherjee',
+  'das',
+  'pillai',
+  'menon',
+  'naidu',
+  'rajan',
+  'kulkarni',
+  'deshmukh',
+  'jadhav',
+  'thakur',
+  'yadav',
+  'chauhan',
+  'rathore',
+  'bhatia',
+  'arora',
+  'sethi',
+  'goel',
+  'goyal',
+  'mittal',
+  'bansal',
+  'saxena',
+  'tiwari',
+  'dubey',
 ];
 
 // Helper: does this line look like a person's name?
@@ -53,12 +135,22 @@ function looksLikeName(line) {
 // these have fixed, reliable patterns, so they stay accurate
 // regardless of card layout or font style.
 function regexExtractBasicFields(text) {
-  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const emailMatch = text.match(
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+  );
+  const email = emailMatch ? emailMatch[0] : '';
+
+  // Remove the matched email from the text before searching for a website,
+  // so the website regex doesn't accidentally match the domain inside the email
+  const textWithoutEmail = email ? text.replace(email, '') : text;
+
   const phoneMatch = text.match(/(\+?\d[\d\s-]{8,}\d)/);
-  const websiteMatch = text.match(/\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|in|net|org|co)\b/i);
+  const websiteMatch = textWithoutEmail.match(
+    /\b(?:www\.)?[a-zA-Z0-9-]+\.(?:com|in|net|org|co)\b/i,
+  );
 
   return {
-    email: emailMatch ? emailMatch[0] : '',
+    email,
     phone: phoneMatch ? phoneMatch[0].trim() : '',
     website: websiteMatch ? websiteMatch[0] : '',
   };
@@ -150,15 +242,26 @@ async function preprocessForOCR(buffer) {
 }
 
 async function recognizeWithRotation(buffer) {
-  const rotations = [0, 90, 180, 270];
-  let best = { text: '', confidence: 0 };
-
   const preprocessed = await preprocessForOCR(buffer);
 
-  for (const angle of rotations) {
-    const rotatedBuffer =
-      angle === 0 ? preprocessed : await sharp(preprocessed).rotate(angle).toBuffer();
+  // Try the straight orientation first - this is correct most of the time
+  const straightResult = await Tesseract.recognize(preprocessed, 'eng');
+  const straightText = straightResult.data.text.trim();
+  const straightConfidence = straightResult.data.confidence;
 
+  // If the result looks reasonably good, stop here - don't waste time
+  // trying other rotations. "Good enough" = some real text with decent confidence.
+  const looksGoodEnough = straightText.length > 15 && straightConfidence > 40;
+
+  if (looksGoodEnough) {
+    return { text: straightText, confidence: straightConfidence, angle: 0 };
+  }
+
+  // Otherwise, the card might be rotated - try the other 3 angles
+  let best = { text: straightText, confidence: straightConfidence, angle: 0 };
+
+  for (const angle of [90, 180, 270]) {
+    const rotatedBuffer = await sharp(preprocessed).rotate(angle).toBuffer();
     const result = await Tesseract.recognize(rotatedBuffer, 'eng');
     const confidence = result.data.confidence;
     const text = result.data.text.trim();
@@ -181,7 +284,9 @@ async function recognizeWithRotation(buffer) {
 // ────────────────────────────────────────────────────────
 const scanCard = asyncHandler(async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ success: false, message: 'Please upload an image.' });
+    return res
+      .status(400)
+      .json({ success: false, message: 'Please upload an image.' });
   }
 
   // ── Step 1: Upload image to Cloudinary ──────────────
@@ -228,7 +333,9 @@ const generateAISummary = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({ _id: contactId, owner: req.user.id });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   // AI summary disabled - leave existing values untouched, just confirm success
@@ -258,7 +365,9 @@ const generateAISummary = asyncHandler(async (req, res) => {
 // ────────────────────────────────────────────────────────
 const uploadVoiceNote = asyncHandler(async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ success: false, message: 'No audio file provided.' });
+    return res
+      .status(400)
+      .json({ success: false, message: 'No audio file provided.' });
   }
 
   const base64Audio = req.file.buffer.toString('base64');
@@ -284,7 +393,9 @@ const retryExtraction = asyncHandler(async (req, res) => {
   const { rawText } = req.body;
 
   if (!rawText) {
-    return res.status(400).json({ success: false, message: 'No raw text provided.' });
+    return res
+      .status(400)
+      .json({ success: false, message: 'No raw text provided.' });
   }
 
   const extractedContact = extractContactFields(rawText);
