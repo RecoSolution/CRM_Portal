@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { setDraft, clearDraft, getDraft } from '../utils/scanDraftStore';
+import { setDraft, clearDraft } from '../utils/scanDraftStore';
 
 export default function Scan() {
   const navigate = useNavigate();
@@ -58,6 +58,18 @@ export default function Scan() {
     }
   }
 
+  function stopCameraStream() {
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  function handleBack() {
+    stopCameraStream();
+    navigate('/home');
+  }
+
   function capturePhoto() {
     setScanning(true);
 
@@ -68,16 +80,12 @@ export default function Scan() {
     canvas.getContext('2d').drawImage(video, 0, 0);
     const imageData = canvas.toDataURL('image/jpeg');
 
-    video.srcObject?.getTracks().forEach((track) => track.stop());
+    stopCameraStream();
 
     setTimeout(() => {
       if (isBackSide) {
-        // Back-side capture: KEEP existing draft data, just add the
-        // back-side image. ScannedCardForm will OCR this separately
-        // and merge the results instead of overwriting.
         setDraft({ backImageData: imageData, isBackSideScan: true });
       } else {
-        // Fresh scan: start a brand new draft
         clearDraft();
         setDraft({ imageData });
       }
@@ -102,62 +110,103 @@ export default function Scan() {
   }
 
   return (
-    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
-
-      <div className="bg-sage flex items-center justify-between px-5 h-12 shrink-0">
-        <button onClick={toggleFlash}>
+    <div className='max-w-[480px] mx-auto h-screen flex flex-col overflow-hidden bg-bg'>
+      {/* Top bar - back button left, scan-history button right */}
+      <div className='bg-sage flex items-center justify-between px-5 h-12 shrink-0'>
+        <button onClick={handleBack}>
           <img
-            src={flashOn ? '/assets/icons/flash-on.svg' : '/assets/icons/flash-off.svg'}
-            alt="flash"
-            className="w-5 h-5"
+            src='/assets/icons/arrow-left.svg'
+            alt='back'
+            className='w-5 h-5 brightness-0 invert'
           />
         </button>
         {isBackSide && (
-          <span className="text-white text-[13px] font-semibold">Scanning Back Side</span>
+          <span className='text-white text-[13px] font-semibold'>
+            Scanning Back Side
+          </span>
         )}
         <button onClick={() => navigate('/scan-history')}>
-          <img src="/assets/icons/scan-history.svg" alt="history" className="w-5 h-5" />
+          <img
+            src='/assets/icons/scan-history.svg'
+            alt='history'
+            className='w-5 h-5'
+          />
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
-        <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+      {/* Camera viewfinder - takes remaining space, never overflows */}
+      <div className='flex-1 flex flex-col items-center justify-center px-6 min-h-0'>
+        <div className='relative w-full max-h-full aspect-[4/3] rounded-3xl overflow-hidden bg-black'>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className='w-full h-full object-cover'
+          />
 
           {!cameraReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black text-white text-sm font-medium">
+            <div className='absolute inset-0 flex items-center justify-center bg-black text-white text-sm font-medium'>
               Starting camera...
             </div>
           )}
 
           {scanning && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-              <div className="bg-bg rounded-2xl px-8 py-6 flex flex-col items-center gap-3">
-                <div className="w-7 h-7 border-2 border-forest border-t-transparent rounded-full animate-spin" />
-                <span className="text-[14px] font-semibold text-gray-900">Scanning Card in Progress...</span>
+            <div className='absolute inset-0 bg-black/60 flex items-center justify-center'>
+              <div className='bg-bg rounded-2xl px-8 py-6 flex flex-col items-center gap-3'>
+                <div className='w-7 h-7 border-2 border-forest border-t-transparent rounded-full animate-spin' />
+                <span className='text-[14px] font-semibold text-gray-900'>
+                  Scanning Card in Progress...
+                </span>
               </div>
             </div>
           )}
         </div>
 
-        <p className="text-center text-[13px] text-gray-600 mt-4">
-          {isBackSide ? 'Now capture the back side of the card' : 'Fix entire card to capture the Image properly'}
+        <p className='text-center text-[12px] text-gray-600 mt-3 px-2'>
+          {isBackSide
+            ? 'Now capture the back side of the card'
+            : 'Fix entire card to capture the Image properly'}
         </p>
       </div>
 
-      <div className="bg-forest flex items-center justify-center gap-12 px-8 py-6 shrink-0">
+      {/* Bottom bar - gallery left, capture center, flash right */}
+      {/* Bottom bar - gallery left, capture center, flash right (closer together) */}
+      <div className='bg-forest flex items-center justify-center gap-16 py-5 shrink-0'>
         <button onClick={() => fileInputRef.current?.click()}>
-          <img src="/assets/icons/gallery-import.svg" alt="import" className="w-6 h-6" />
+          <img
+            src='/assets/icons/gallery-import.svg'
+            alt='import'
+            className='w-6 h-6'
+          />
         </button>
 
         <button
           onClick={capturePhoto}
           disabled={scanning || !cameraReady}
-          className="w-16 h-16 rounded-full bg-sage border-4 border-white/30 disabled:opacity-60"
+          className='w-16 h-16 rounded-full bg-sage border-4 border-white/30 disabled:opacity-60'
         />
+
+        <button onClick={toggleFlash}>
+          <img
+            src={
+              flashOn
+                ? '/assets/icons/flash-on.svg'
+                : '/assets/icons/flash-off.svg'
+            }
+            alt='flash'
+            className='w-6 h-6'
+          />
+        </button>
       </div>
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleGalleryImport} />
+      <input
+        ref={fileInputRef}
+        type='file'
+        accept='image/*'
+        className='hidden'
+        onChange={handleGalleryImport}
+      />
     </div>
   );
 }

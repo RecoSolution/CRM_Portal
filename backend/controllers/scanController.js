@@ -24,7 +24,7 @@ async function recognizeWithOcrSpace(base64Image, mimetype) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData.toString(),
   });
-
+1
   const data = await res.json();
 
   if (data.IsErroredOnProcessing) {
@@ -167,6 +167,7 @@ const COMPANY_SUFFIXES = [
   'incorporated',
   'corp',
   'corporation',
+  'corporate',
   'co. ltd',
   'company',
   'enterprises',
@@ -388,7 +389,7 @@ function extractWebsiteAndDomainCompany(textWithoutEmail) {
 
 function regexExtractBasicFields(text) {
   const emailMatch = text.match(
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, 
   );
   const email = emailMatch ? emailMatch[0] : '';
 
@@ -397,6 +398,8 @@ function regexExtractBasicFields(text) {
   const phones = extractPhones(text);
   const { website, domainCompanyGuess } =
     extractWebsiteAndDomainCompany(textWithoutEmail);
+
+    
 
   return {
     email,

@@ -5,6 +5,7 @@ let draft = {
   cardImageUrl: null,
   voiceBlob: null,
   voiceTranscript: '',
+  notes: '',
   reminder: null,
   extractedContact: null,
   relationType: '',

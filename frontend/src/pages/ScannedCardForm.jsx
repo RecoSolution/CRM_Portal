@@ -30,7 +30,7 @@ export default function ScannedCardForm() {
   const [collectedBy, setCollectedBy] = useState(
     () => getDraft().collectedBy || '',
   );
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(() => getDraft().notes || '');
   const [voiceBlob, setVoiceBlob] = useState(null);
   const [reminder, setReminder] = useState(null);
   const [extracting, setExtracting] = useState(true);
@@ -151,6 +151,10 @@ export default function ScannedCardForm() {
   }, []);
 
   useEffect(() => {
+    setDraft({ notes });
+  }, [notes]);
+
+  useEffect(() => {
     if (voiceBlob) {
       const url = URL.createObjectURL(voiceBlob);
       setVoiceAudioUrl(url);
@@ -226,7 +230,6 @@ export default function ScannedCardForm() {
 
     try {
       let audioUrl = '';
-
       if (voiceBlob) {
         const audioFormData = new FormData();
         audioFormData.append('audio', voiceBlob, 'voice-note.webm');
@@ -481,7 +484,7 @@ export default function ScannedCardForm() {
         <input
           value={collectedBy}
           onChange={(e) => setCollectedBy(e.target.value)}
-          placeholder='......................................'
+          placeholder='Collected by'
           className='w-full h-11 rounded-xl px-4 text-[14px] text-gray-900 bg-white/70 border-none outline-none'
         />
       </div>

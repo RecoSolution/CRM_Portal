@@ -340,24 +340,28 @@ export default function ContactDetail() {
         </>
       )}
 
-      {/* Voice Note playback */}
-      {contact.notes?.some((n) => n.audioUrl) && (
-        <>
-          <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
-            Voice Note
-          </p>
-          {contact.notes
-            .filter((n) => n.audioUrl)
-            .map((n) => (
-              <audio
-                key={n._id}
-                controls
-                src={n.audioUrl}
-                className='w-full mb-4'
-              />
-            ))}
-        </>
-      )}
+      {/* Voice Note */}
+{contact.notes?.some((n) => n.audioUrl?.trim()) && (
+  <>
+    <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
+      Voice Note
+    </p>
+
+    {contact.notes
+      .filter((n) => n.audioUrl?.trim())
+      .map((n) => (
+        <audio
+          key={n._id}
+          controls
+          preload='metadata'
+          className='w-full mb-4 rounded-xl'
+        >
+          <source src={n.audioUrl} type='audio/webm' />
+          Your browser does not support the audio element.
+        </audio>
+      ))}
+  </>
+)}
 
       {/* Card image */}
       {contact.cardImageUrl && (
