@@ -13,11 +13,23 @@ export default function ScannedCardForm() {
   const [cardImageUrl, setCardImageUrl] = useState('');
 
   const [form, setForm] = useState({
-    name: '', jobTitle: '', company: '', phone: '', email: '', website: '', address: '',
+    name: '',
+    jobTitle: '',
+    company: '',
+    phone: '',
+    email: '',
+    website: '',
+    address: '',
   });
-  const [relationType, setRelationType] = useState(() => getDraft().relationType || '');
-  const [contactSource, setContactSource] = useState(() => getDraft().contactSource || '');
-  const [collectedBy, setCollectedBy] = useState(() => getDraft().collectedBy || '');
+  const [relationType, setRelationType] = useState(
+    () => getDraft().relationType || '',
+  );
+  const [contactSource, setContactSource] = useState(
+    () => getDraft().contactSource || '',
+  );
+  const [collectedBy, setCollectedBy] = useState(
+    () => getDraft().collectedBy || '',
+  );
   const [notes, setNotes] = useState('');
   const [voiceBlob, setVoiceBlob] = useState(null);
   const [reminder, setReminder] = useState(null);
@@ -67,10 +79,12 @@ export default function ScannedCardForm() {
           jobTitle: c.designation || '',
           company: c.company || '',
           phone: c.phone || '',
+          phone2: c.phone2 || '',
           email: c.email || '',
           website: c.website || '',
           address: c.address || '',
         };
+
         setForm(extracted);
         setDraft({ extractedContact: extracted });
       } catch (err) {
@@ -80,6 +94,60 @@ export default function ScannedCardForm() {
       }
     }
     extract();
+  }, []);
+
+  // ── Handle back-side scan: OCR it separately, merge into existing form ──
+  useEffect(() => {
+    const d = getDraft();
+    if (!d.isBackSideScan || !d.backImageData) return;
+
+    async function extractBackSide() {
+      setExtracting(true);
+      try {
+        const blob = await (await fetch(d.backImageData)).blob();
+        const formData = new FormData();
+        formData.append('card', blob, 'card-back.jpg');
+
+        const res = await api.post('/scan/ocr', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const c = res.data.extractedContact;
+
+        // Merge: only fill fields that are currently empty.
+        // Front-side data always takes priority and is never overwritten.
+        setForm((prev) => {
+          const merged = {
+            name: prev.name || c.name || '',
+            jobTitle: prev.jobTitle || c.designation || '',
+            company: prev.company || c.company || '',
+            phone: prev.phone || c.phone || '',
+            phone2: prev.phone2 || c.phone2 || '',
+            email: prev.email || c.email || '',
+            website: prev.website || c.website || '',
+            address: prev.address || c.address || '',
+          };
+          setDraft({ extractedContact: merged });
+          return merged;
+        });
+
+        // Append back-side raw text to the existing raw text for the debug view
+        setRawText((prev) =>
+          prev
+            ? `${prev}\n\n--- BACK SIDE ---\n${res.data.rawText || ''}`
+            : res.data.rawText || '',
+        );
+      } catch (err) {
+        setError(
+          'Could not read the back side automatically. You can fill in any missing fields manually.',
+        );
+      } finally {
+        setExtracting(false);
+        setDraft({ isBackSideScan: false, backImageData: null }); // consume the flag
+      }
+    }
+
+    extractBackSide();
   }, []);
 
   useEffect(() => {
@@ -136,7 +204,8 @@ export default function ScannedCardForm() {
 
   function handleAudioTimeUpdate() {
     if (!audioRef.current?.duration) return;
-    const progress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+    const progress =
+      (audioRef.current.currentTime / audioRef.current.duration) * 100;
     setPlaybackProgress(progress);
   }
 
@@ -193,7 +262,8 @@ export default function ScannedCardForm() {
       navigate(`/contacts/${contactId}`);
     } catch (err) {
       setError(
-        err.response?.data?.message || 'Could not save contact. Please try again.',
+        err.response?.data?.message ||
+          'Could not save contact. Please try again.',
       );
     } finally {
       setSaving(false);
@@ -206,12 +276,20 @@ export default function ScannedCardForm() {
         onClick={() => navigate('/home')}
         className='w-10 h-10 flex items-center justify-center -ml-2 mb-3'
       >
-        <img src='/assets/icons/arrow-left.svg' alt='back' className='w-5 h-5' />
+        <img
+          src='/assets/icons/arrow-left.svg'
+          alt='back'
+          className='w-5 h-5'
+        />
       </button>
 
       <div className='relative rounded-2xl border-2 border-forest/30 overflow-hidden mb-4 bg-white'>
         {capturedImage ? (
-          <img src={capturedImage} alt='Scanned card' className='w-full h-auto object-contain' />
+          <img
+            src={capturedImage}
+            alt='Scanned card'
+            className='w-full h-auto object-contain'
+          />
         ) : (
           <div className='aspect-[16/9] flex items-center justify-center text-gray-400 text-sm'>
             No image captured
@@ -220,7 +298,9 @@ export default function ScannedCardForm() {
         {extracting && (
           <div className='absolute inset-0 bg-white/80 flex items-center justify-center gap-2'>
             <div className='w-5 h-5 border-2 border-forest border-t-transparent rounded-full animate-spin' />
-            <span className='text-[13px] font-medium text-gray-700'>Reading card...</span>
+            <span className='text-[13px] font-medium text-gray-700'>
+              Reading card...
+            </span>
           </div>
         )}
       </div>
@@ -264,7 +344,9 @@ export default function ScannedCardForm() {
 
       <div className='flex flex-col gap-4 mb-2'>
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Name</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Name
+          </label>
           <input
             value={form.name}
             onChange={(e) => handleChange('name', e.target.value)}
@@ -273,7 +355,9 @@ export default function ScannedCardForm() {
         </div>
 
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Job Title</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Job Title
+          </label>
           <input
             value={form.jobTitle}
             onChange={(e) => handleChange('jobTitle', e.target.value)}
@@ -282,7 +366,9 @@ export default function ScannedCardForm() {
         </div>
 
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Company</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Company
+          </label>
           <input
             value={form.company}
             onChange={(e) => handleChange('company', e.target.value)}
@@ -291,7 +377,9 @@ export default function ScannedCardForm() {
         </div>
 
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Mobile No.</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Mobile No.
+          </label>
           <input
             value={form.phone}
             onChange={(e) => handleChange('phone', e.target.value)}
@@ -300,7 +388,9 @@ export default function ScannedCardForm() {
         </div>
 
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Email</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Email
+          </label>
           <input
             value={form.email}
             onChange={(e) => handleChange('email', e.target.value)}
@@ -309,7 +399,20 @@ export default function ScannedCardForm() {
         </div>
 
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Website</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Mobile No. 2 (optional)
+          </label>
+          <input
+            value={form.phone2}
+            onChange={(e) => handleChange('phone2', e.target.value)}
+            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
+          />
+        </div>
+
+        <div>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Website
+          </label>
           <input
             value={form.website}
             onChange={(e) => handleChange('website', e.target.value)}
@@ -318,7 +421,9 @@ export default function ScannedCardForm() {
         </div>
 
         <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Address</label>
+          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
+            Address
+          </label>
           <input
             value={form.address}
             onChange={(e) => handleChange('address', e.target.value)}
@@ -328,14 +433,18 @@ export default function ScannedCardForm() {
       </div>
 
       <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Relation Type</p>
+        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>
+          Relation Type
+        </p>
         <div className='flex gap-2 flex-wrap'>
           {RELATION_TYPES.map((type) => (
             <button
               key={type}
               onClick={() => setRelationType(type)}
               className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                relationType === type ? 'bg-sage text-white' : 'bg-white/70 text-gray-500'
+                relationType === type
+                  ? 'bg-sage text-white'
+                  : 'bg-white/70 text-gray-500'
               }`}
             >
               {type}
@@ -345,14 +454,18 @@ export default function ScannedCardForm() {
       </div>
 
       <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Contact Source</p>
+        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>
+          Contact Source
+        </p>
         <div className='flex gap-2 flex-wrap'>
           {CONTACT_SOURCES.map((source) => (
             <button
               key={source}
               onClick={() => setContactSource(source)}
               className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                contactSource === source ? 'bg-sage text-white' : 'bg-white/70 text-gray-500'
+                contactSource === source
+                  ? 'bg-sage text-white'
+                  : 'bg-white/70 text-gray-500'
               }`}
             >
               {source}
@@ -362,7 +475,9 @@ export default function ScannedCardForm() {
       </div>
 
       <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Collected By</p>
+        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>
+          Collected By
+        </p>
         <input
           value={collectedBy}
           onChange={(e) => setCollectedBy(e.target.value)}
@@ -392,7 +507,11 @@ export default function ScannedCardForm() {
               className='w-9 h-9 rounded-full bg-white/30 flex items-center justify-center shrink-0'
             >
               <img
-                src={isPlaying ? '/assets/icons/pause.svg' : '/assets/icons/play.svg'}
+                src={
+                  isPlaying
+                    ? '/assets/icons/pause.svg'
+                    : '/assets/icons/play.svg'
+                }
                 alt={isPlaying ? 'pause' : 'play'}
                 className='w-4 h-4'
               />
@@ -410,13 +529,20 @@ export default function ScannedCardForm() {
               onClick={removeVoiceNote}
               className='w-8 h-8 rounded-full bg-white/30 flex items-center justify-center shrink-0'
             >
-              <img src='/assets/icons/close.svg' alt='remove' className='w-4 h-4' />
+              <img
+                src='/assets/icons/close.svg'
+                alt='remove'
+                className='w-4 h-4'
+              />
             </button>
 
             <audio
               ref={audioRef}
               src={voiceAudioUrl}
-              onEnded={() => { setIsPlaying(false); setPlaybackProgress(0); }}
+              onEnded={() => {
+                setIsPlaying(false);
+                setPlaybackProgress(0);
+              }}
               onTimeUpdate={handleAudioTimeUpdate}
               className='hidden'
             />
@@ -442,7 +568,11 @@ export default function ScannedCardForm() {
           }`}
         >
           <img
-            src={reminder ? '/assets/icons/check-circle.svg' : '/assets/icons/bell.svg'}
+            src={
+              reminder
+                ? '/assets/icons/check-circle.svg'
+                : '/assets/icons/bell.svg'
+            }
             alt=''
             className='w-4 h-4'
           />

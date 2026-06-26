@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { setDraft, clearDraft } from '../utils/scanDraftStore';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { setDraft, clearDraft, getDraft } from '../utils/scanDraftStore';
 
 export default function Scan() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isBackSide = location.state?.backSide || false;
+
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const streamRef = useRef(null);
@@ -25,7 +28,7 @@ export default function Scan() {
   async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }, // always back camera
+        video: { facingMode: 'environment' },
       });
       streamRef.current = stream;
       if (videoRef.current) {
@@ -68,8 +71,16 @@ export default function Scan() {
     video.srcObject?.getTracks().forEach((track) => track.stop());
 
     setTimeout(() => {
-      clearDraft();
-      setDraft({ imageData });
+      if (isBackSide) {
+        // Back-side capture: KEEP existing draft data, just add the
+        // back-side image. ScannedCardForm will OCR this separately
+        // and merge the results instead of overwriting.
+        setDraft({ backImageData: imageData, isBackSideScan: true });
+      } else {
+        // Fresh scan: start a brand new draft
+        clearDraft();
+        setDraft({ imageData });
+      }
       navigate('/scanned-card');
     }, 800);
   }
@@ -79,8 +90,12 @@ export default function Scan() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      clearDraft();
-      setDraft({ imageData: reader.result });
+      if (isBackSide) {
+        setDraft({ backImageData: reader.result, isBackSideScan: true });
+      } else {
+        clearDraft();
+        setDraft({ imageData: reader.result });
+      }
       navigate('/scanned-card');
     };
     reader.readAsDataURL(file);
@@ -97,6 +112,9 @@ export default function Scan() {
             className="w-5 h-5"
           />
         </button>
+        {isBackSide && (
+          <span className="text-white text-[13px] font-semibold">Scanning Back Side</span>
+        )}
         <button onClick={() => navigate('/scan-history')}>
           <img src="/assets/icons/scan-history.svg" alt="history" className="w-5 h-5" />
         </button>
@@ -104,13 +122,7 @@ export default function Scan() {
 
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
+          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
 
           {!cameraReady && (
             <div className="absolute inset-0 flex items-center justify-center bg-black text-white text-sm font-medium">
@@ -129,7 +141,7 @@ export default function Scan() {
         </div>
 
         <p className="text-center text-[13px] text-gray-600 mt-4">
-          Fix entire card to capture the Image properly
+          {isBackSide ? 'Now capture the back side of the card' : 'Fix entire card to capture the Image properly'}
         </p>
       </div>
 
@@ -145,13 +157,7 @@ export default function Scan() {
         />
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleGalleryImport}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleGalleryImport} />
     </div>
   );
 }

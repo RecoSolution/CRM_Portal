@@ -1,5 +1,8 @@
 let draft = {
   imageData: null,
+  backImageData: null,
+  isBackSideScan: false,
+  cardImageUrl: null,
   voiceBlob: null,
   voiceTranscript: '',
   reminder: null,
@@ -7,19 +10,20 @@ let draft = {
   relationType: '',
   contactSource: '',
   collectedBy: '',
-}
+};
 
 export function getDraft() {
-  return draft
+  return draft;
 }
 
 export function setDraft(partial) {
-  draft = { ...draft, ...partial }
+  draft = { ...draft, ...partial };
 }
 
 export function clearDraft() {
   draft = {
-    imageData: null, voiceBlob: null, voiceTranscript: '', reminder: null,
+    imageData: null, backImageData: null, isBackSideScan: false,
+    cardImageUrl: null, voiceBlob: null, voiceTranscript: '', reminder: null,
     extractedContact: null, relationType: '', contactSource: '', collectedBy: '',
-  }
+  };
 }
