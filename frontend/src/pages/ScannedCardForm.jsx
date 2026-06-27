@@ -1,297 +1,335 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../utils/api';
-import { getDraft, setDraft, clearDraft } from '../utils/scanDraftStore';
+import { setDraft } from '../utils/scanDraftStore';
 
-const RELATION_TYPES = ['Lead', 'Vendor', 'Customer', 'Partner'];
-const CONTACT_SOURCES = ['GREENS 2026', 'Factory Visit', 'GCPRS 2026', 'Other'];
-
-export default function ScannedCardForm() {
+export default function VoiceNote() {
   const navigate = useNavigate();
 
-  const [capturedImage] = useState(() => getDraft().imageData);
-  const [cardImageUrl, setCardImageUrl] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [finishing, setFinishing] = useState(false);
+  const [debugLog, setDebugLog] = useState([]);
 
-  const [form, setForm] = useState({
-    name: '',
-    jobTitle: '',
-    company: '',
-    phone: '',
-    phone2: '',
-    email: '',
-    website: '',
-    address: '',
-  });
-  const [relationType, setRelationType] = useState(
-    () => getDraft().relationType || '',
-  );
-  const [contactSource, setContactSource] = useState(
-    () => getDraft().contactSource || '',
-  );
-  const [collectedBy, setCollectedBy] = useState(
-    () => getDraft().collectedBy || '',
-  );
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const recognitionRef = useRef(null);
+  const timerRef = useRef(null);
+  const hasStartedRef = useRef(false);
+  const transcriptRef = useRef('');
 
-  // notes is initialized ONCE from whatever is in the draft at first mount.
-  // After that, it is the single source of truth - we never re-read
-  // getDraft().notes again, and we consume voiceTranscript directly
-  // into this state below, every render, with no dependency-array gating.
-  const [notes, setNotes] = useState(() => getDraft().notes || '');
-
-  const [voiceBlob, setVoiceBlob] = useState(
-    () => getDraft().voiceBlob || null,
-  );
-  const [reminder, setReminder] = useState(() => getDraft().reminder || null);
-  const [extracting, setExtracting] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [rawText, setRawText] = useState('');
-  const [showRawText, setShowRawText] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [voiceAudioUrl, setVoiceAudioUrl] = useState(null);
-  const [playbackProgress, setPlaybackProgress] = useState(0);
-  const audioRef = useRef(null);
-
-  // ── Consume voice transcript - runs on EVERY render, no deps array.
-  //    This guarantees it can never be missed due to remount/effect-timing
-  //    issues. It's safe to run every render because it checks for a
-  //    non-empty value and immediately clears it from the draft after
-  //    consuming, so it only ever fires its body once per actual recording. ──
-  const draftNow = getDraft();
-  if (draftNow.voiceTranscript) {
-    const incoming = draftNow.voiceTranscript;
-    setDraft({ voiceTranscript: '' }); // consume immediately, before any async gap
-
-    setNotes((prev) => {
-      const merged = prev && prev.trim() ? `${prev}\n${incoming}` : incoming;
-      setDraft({ notes: merged });
-      return merged;
-    });
-  }
-  if (draftNow.voiceBlob && !voiceBlob) {
-    setVoiceBlob(draftNow.voiceBlob);
-  }
-  if (draftNow.reminder && !reminder) {
-    setReminder(draftNow.reminder);
+  function log(msg) {
+    console.log('[VOICE]', msg);
+    setDebugLog((prev) => [
+      ...prev,
+      `${new Date().toLocaleTimeString()} - ${msg}`,
+    ]);
   }
 
-  // ── Run OCR + extraction ONCE per scan ──
   useEffect(() => {
-    const d = getDraft();
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
 
-    if (d.extractedContact) {
-      setForm(d.extractedContact);
-      setCardImageUrl(d.cardImageUrl || '');
-      setExtracting(false);
-      return;
-    }
+    log(`UserAgent: ${navigator.userAgent}`);
+    log(`Secure Context: ${window.isSecureContext}`);
+    log(`Origin: ${window.location.origin}`);
 
-    if (!capturedImage) {
-      setExtracting(false);
-      return;
-    }
+    startRecording();
 
-    async function extract() {
-      try {
-        const blob = await (await fetch(capturedImage)).blob();
-        const formData = new FormData();
-        formData.append('card', blob, 'card.jpg');
-
-        const res = await api.post('/scan/ocr', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        setRawText(res.data.rawText || '');
-        setCardImageUrl(res.data.cardImageUrl || '');
-        setDraft({ cardImageUrl: res.data.cardImageUrl || '' });
-
-        const c = res.data.extractedContact;
-        const extracted = {
-          name: c.name || '',
-          jobTitle: c.designation || '',
-          company: c.company || '',
-          phone: c.phone || '',
-          phone2: c.phone2 || '',
-          email: c.email || '',
-          website: c.website || '',
-          address: c.address || '',
-        };
-
-        setForm(extracted);
-        setDraft({ extractedContact: extracted });
-      } catch (err) {
-        setError('Could not read card automatically. Please fill in manually.');
-      } finally {
-        setExtracting(false);
-      }
-    }
-    extract();
+    return () => {
+      stopTimer();
+      recognitionRef.current?.stop();
+      mediaRecorderRef.current?.stream?.getTracks().forEach((t) => t.stop());
+    };
   }, []);
 
-  // ── Handle back-side scan: OCR it separately, merge into existing form ──
-  useEffect(() => {
-    const d = getDraft();
-    if (!d.isBackSideScan || !d.backImageData) return;
-
-    async function extractBackSide() {
-      setExtracting(true);
-      try {
-        const blob = await (await fetch(d.backImageData)).blob();
-        const formData = new FormData();
-        formData.append('card', blob, 'card-back.jpg');
-
-        const res = await api.post('/scan/ocr', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        const c = res.data.extractedContact;
-
-        setForm((prev) => {
-          const merged = {
-            name: prev.name || c.name || '',
-            jobTitle: prev.jobTitle || c.designation || '',
-            company: prev.company || c.company || '',
-            phone: prev.phone || c.phone || '',
-            phone2: prev.phone2 || c.phone2 || '',
-            email: prev.email || c.email || '',
-            website: prev.website || c.website || '',
-            address: prev.address || c.address || '',
-          };
-          setDraft({ extractedContact: merged });
-          return merged;
-        });
-
-        setRawText((prev) =>
-          prev
-            ? `${prev}\n\n--- BACK SIDE ---\n${res.data.rawText || ''}`
-            : res.data.rawText || '',
-        );
-      } catch (err) {
-        setError(
-          'Could not read the back side automatically. You can fill in any missing fields manually.',
-        );
-      } finally {
-        setExtracting(false);
-        setDraft({ isBackSideScan: false, backImageData: null });
-      }
-    }
-
-    extractBackSide();
-  }, []);
-
-  useEffect(() => {
-    if (voiceBlob) {
-      const url = URL.createObjectURL(voiceBlob);
-      setVoiceAudioUrl(url);
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setVoiceAudioUrl(null);
-    }
-  }, [voiceBlob]);
-
-  // ── Keep draft in sync with live edits ──
-  useEffect(() => {
-    if (!extracting) {
-      setDraft({ extractedContact: form });
-    }
-  }, [form]);
-
-  useEffect(() => {
-    setDraft({ relationType, contactSource, collectedBy });
-  }, [relationType, contactSource, collectedBy]);
-
-  // Sync notes to draft on every manual edit too (typing in the textarea)
-  useEffect(() => {
-    setDraft({ notes });
-  }, [notes]);
-
-  function handleChange(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function formatTime(totalSeconds) {
+    const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const s = String(totalSeconds % 60).padStart(2, '0');
+    return `${m}:${s}`;
   }
 
-  function toggleVoicePlayback() {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play();
-      setIsPlaying(true);
-    }
+  function startTimer() {
+    timerRef.current = setInterval(() => {
+      setSeconds((s) => s + 1);
+    }, 1000);
   }
 
-  function handleAudioTimeUpdate() {
-    if (!audioRef.current?.duration) return;
-    const progress =
-      (audioRef.current.currentTime / audioRef.current.duration) * 100;
-    setPlaybackProgress(progress);
+  function stopTimer() {
+    clearInterval(timerRef.current);
   }
 
-  function removeVoiceNote() {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    setIsPlaying(false);
-    setPlaybackProgress(0);
-    setVoiceBlob(null);
-    setDraft({ voiceBlob: null });
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    setError('');
-
+  async function startRecording() {
     try {
-      let audioUrl = '';
-      if (voiceBlob) {
-        const audioFormData = new FormData();
-        audioFormData.append('audio', voiceBlob, 'voice-note.webm');
-        const audioRes = await api.post('/scan/upload-voice', audioFormData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        audioUrl = audioRes.data.audioUrl;
-      }
+      log('Requesting microphone permission...');
 
-      const res = await api.post('/contacts', {
-        name: form.name,
-        designation: form.jobTitle,
-        company: form.company,
-        phone: form.phone,
-        email: form.email,
-        website: form.website,
-        address: form.address,
-        relationshipType: relationType ? relationType.toLowerCase() : undefined,
-        event: contactSource || undefined,
-        cardImageUrl: cardImageUrl || undefined,
-        notes: notes
-          ? [{ content: notes, type: voiceBlob ? 'voice' : 'text', audioUrl }]
-          : [],
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
       });
 
-      const contactId = res.data.contact._id;
+      log('Microphone permission granted.');
 
-      if (reminder) {
-        await api.post(`/contacts/${contactId}/reminders`, reminder);
+      const recorder = new MediaRecorder(stream);
+
+      log(`MediaRecorder mimeType: ${recorder.mimeType}`);
+      log(`MediaRecorder state: ${recorder.state}`);
+
+      chunksRef.current = [];
+
+      recorder.onstart = () => {
+        log('Recorder onstart fired.');
+      };
+
+      recorder.ondataavailable = (e) => {
+        chunksRef.current.push(e.data);
+        log(
+          `ondataavailable fired. Size=${e.data.size} bytes, chunks=${chunksRef.current.length}`,
+        );
+      };
+
+      recorder.onerror = (e) => {
+        log(`Recorder error: ${e.error?.message || 'Unknown'}`);
+      };
+
+      recorder.onpause = () => {
+        log('Recorder paused.');
+      };
+
+      recorder.onresume = () => {
+        log('Recorder resumed.');
+      };
+
+      recorder.start();
+
+      mediaRecorderRef.current = recorder;
+
+      log('Recorder started successfully.');
+
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      log(`SpeechRecognition available: ${!!SpeechRecognition}`);
+
+      if (!SpeechRecognition) {
+        log('Browser does not support SpeechRecognition.');
+      } else {
+        log(`SpeechRecognition: ${!!window.SpeechRecognition}`);
+        log(`webkitSpeechRecognition: ${!!window.webkitSpeechRecognition}`);
+        const recognition = new SpeechRecognition();
+        log(`Recognition constructor: ${recognition.constructor.name}`);
+        log(`navigator.onLine: ${navigator.onLine}`);
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-IN';
+
+        recognition.onaudiostart = () => log('onaudiostart');
+        recognition.onsoundstart = () => log('onsoundstart');
+        recognition.onspeechstart = () => log('onspeechstart');
+        recognition.onspeechend = () => log('onspeechend');
+        recognition.onsoundend = () => log('onsoundend');
+        recognition.onaudioend = () => log('onaudioend');
+        recognition.onnomatch = () => log('onnomatch');
+
+        recognition.onstart = () => {
+          log('SpeechRecognition started.');
+        };
+
+        recognition.onaudiostart = () => {
+          log('Audio capture started.');
+        };
+
+        recognition.onsoundstart = () => {
+          log('Sound detected.');
+        };
+
+        recognition.onspeechstart = () => {
+          log('Speech started.');
+        };
+
+        recognition.onresult = (event) => {
+          let text = '';
+
+          for (let i = 0; i < event.results.length; i++) {
+            text += event.results[i][0].transcript;
+          }
+
+          transcriptRef.current = text;
+
+          log(`Transcript updated (${text.length} chars): "${text}"`);
+        };
+        recognition.onerror = (event) => {
+          log(
+            `SpeechRecognition ERROR -> ${event.error} ${event.message || ''}`,
+          );
+        };
+
+        recognition.onnomatch = () => {
+          log('SpeechRecognition onnomatch fired.');
+        };
+
+        recognition.onspeechend = () => {
+          log('Speech ended.');
+        };
+
+        recognition.onsoundend = () => {
+          log('Sound ended.');
+        };
+
+        recognition.onaudioend = () => {
+          log('Audio capture ended.');
+        };
+
+        recognition.onend = () => {
+          log(
+            `SpeechRecognition ended. Final transcript="${transcriptRef.current}"`,
+          );
+        };
+
+        try {
+          recognition.start();
+          recognitionRef.current = recognition;
+          log('recognition.start() called successfully.');
+        } catch (err) {
+          log(`recognition.start() threw error: ${err.message}`);
+        }
       }
 
-      clearDraft();
-      navigate(`/contacts/${contactId}`);
+      setRecording(true);
+      startTimer();
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Could not save contact. Please try again.',
-      );
-    } finally {
-      setSaving(false);
+      log(`getUserMedia ERROR: ${err.message}`);
+      setRecording(false);
     }
+  }
+
+  function releaseMicrophone() {
+    log('Releasing microphone tracks...');
+    mediaRecorderRef.current?.stream?.getTracks().forEach((track) => {
+      log(`Stopping track: ${track.kind}`);
+      track.stop();
+    });
+  }
+
+  function handleConfirm() {
+    log('Confirm button pressed.');
+
+    setFinishing(true);
+    stopTimer();
+    setRecording(false);
+
+    const recognition = recognitionRef.current;
+    const recorder = mediaRecorderRef.current;
+
+    let recognitionDone = !recognition;
+    let recorderDone = false;
+    let finalBlob = null;
+
+    function tryFinish() {
+      log(
+        `tryFinish -> recognitionDone=${recognitionDone}, recorderDone=${recorderDone}`,
+      );
+
+      if (!recognitionDone || !recorderDone) return;
+
+      log(`Saving draft. Transcript length=${transcriptRef.current.length}`);
+
+      if (finalBlob) {
+        log(`Blob size=${finalBlob.size} bytes`);
+      }
+
+      setDraft({
+        voiceBlob: finalBlob,
+        voiceTranscript: transcriptRef.current,
+      });
+
+      log('Draft saved successfully.');
+
+      releaseMicrophone();
+
+      log('Navigating to /scanned-card in 3 seconds...');
+
+      setTimeout(() => {
+        navigate('/scanned-card');
+      }, 3000);
+    }
+
+    if (recorder && recorder.state !== 'inactive') {
+      log(`Stopping recorder. Current state=${recorder.state}`);
+
+      recorder.onstop = () => {
+        finalBlob = new Blob(chunksRef.current, {
+          type: 'audio/webm',
+        });
+
+        recorderDone = true;
+
+        log(`Recorder stopped. Blob created (${finalBlob.size} bytes).`);
+
+        tryFinish();
+      };
+
+      recorder.stop();
+    } else {
+      log('Recorder already inactive.');
+      recorderDone = true;
+    }
+
+    if (recognition) {
+      recognition.onend = () => {
+        recognitionDone = true;
+
+        log(
+          `Recognition finished during confirm. Transcript="${transcriptRef.current}"`,
+        );
+
+        tryFinish();
+      };
+
+      try {
+        recognition.stop();
+        log('recognition.stop() called.');
+      } catch (err) {
+        log(`recognition.stop() ERROR: ${err.message}`);
+      }
+    }
+
+    setTimeout(() => {
+      if (!recognitionDone) {
+        log('Safety timeout reached (2s). Forcing recognitionDone=true');
+        recognitionDone = true;
+        tryFinish();
+      }
+    }, 2000);
+  }
+
+  function handleCancel() {
+    log('Cancel pressed.');
+
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== 'inactive'
+    ) {
+      mediaRecorderRef.current.onstop = () => {
+        releaseMicrophone();
+      };
+
+      mediaRecorderRef.current.stop();
+    } else {
+      releaseMicrophone();
+    }
+
+    recognitionRef.current?.stop();
+
+    stopTimer();
+    setRecording(false);
+
+    navigate(-1);
   }
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg px-5 pt-5 pb-10'>
+    <div className='max-w-[480px] mx-auto min-h-screen bg-bg px-6 pt-5 pb-10 flex flex-col'>
       <button
-        onClick={() => navigate('/home')}
-        className='w-10 h-10 flex items-center justify-center -ml-2 mb-3'
+        onClick={handleCancel}
+        className='w-10 h-10 flex items-center justify-center -ml-2 mb-4'
       >
         <img
           src='/assets/icons/arrow-left.svg'
@@ -300,310 +338,76 @@ export default function ScannedCardForm() {
         />
       </button>
 
-      <div className='relative rounded-2xl border-2 border-forest/30 overflow-hidden mb-4 bg-white'>
-        {capturedImage ? (
-          <img
-            src={capturedImage}
-            alt='Scanned card'
-            className='w-full h-auto object-contain'
-          />
-        ) : (
-          <div className='aspect-[16/9] flex items-center justify-center text-gray-400 text-sm'>
-            No image captured
-          </div>
-        )}
-        {extracting && (
-          <div className='absolute inset-0 bg-white/80 flex items-center justify-center gap-2'>
-            <div className='w-5 h-5 border-2 border-forest border-t-transparent rounded-full animate-spin' />
-            <span className='text-[13px] font-medium text-gray-700'>
-              Reading card...
-            </span>
-          </div>
-        )}
-      </div>
-
-      {rawText && (
-        <button
-          onClick={() => setShowRawText(!showRawText)}
-          className='text-[12px] text-gray-500 underline mb-3'
-        >
-          {showRawText ? 'Hide' : 'Show'} raw scanned text (for verification)
-        </button>
-      )}
-      {showRawText && (
-        <pre className='text-[11px] text-gray-600 bg-white/60 rounded-xl p-3 mb-4 whitespace-pre-wrap'>
-          {rawText}
-        </pre>
-      )}
-
-      <div className='flex gap-3 mb-6'>
-        <button
-          onClick={() => navigate('/scan')}
-          className='flex-1 h-11 rounded-full bg-sage/40 text-gray-800 font-semibold text-[13px] flex items-center justify-center gap-2'
-        >
-          <img src='/assets/icons/rescan.svg' alt='' className='w-4 h-4' />
-          Rescan
-        </button>
-        <button
-          onClick={() => navigate('/scan', { state: { backSide: true } })}
-          className='flex-1 h-11 rounded-full bg-forest text-white font-semibold text-[13px] flex items-center justify-center gap-2'
-        >
-          <img src='/assets/icons/plus-circle.svg' alt='' className='w-4 h-4' />
-          Capture Back Side
-        </button>
-      </div>
-
-      {error && (
-        <div className='bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4'>
-          {error}
-        </div>
-      )}
-
-      <div className='flex flex-col gap-4 mb-2'>
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Name
-          </label>
-          <input
-            value={form.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Job Title
-          </label>
-          <input
-            value={form.jobTitle}
-            onChange={(e) => handleChange('jobTitle', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Company
-          </label>
-          <input
-            value={form.company}
-            onChange={(e) => handleChange('company', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Mobile No.
-          </label>
-          <input
-            value={form.phone}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Email
-          </label>
-          <input
-            value={form.email}
-            onChange={(e) => handleChange('email', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Mobile No. 2 (optional)
-          </label>
-          <input
-            value={form.phone2}
-            onChange={(e) => handleChange('phone2', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Website
-          </label>
-          <input
-            value={form.website}
-            onChange={(e) => handleChange('website', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-            Address
-          </label>
-          <input
-            value={form.address}
-            onChange={(e) => handleChange('address', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-      </div>
-
-      <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>
-          Relation Type
-        </p>
-        <div className='flex gap-2 flex-wrap'>
-          {RELATION_TYPES.map((type) => (
-            <button
-              key={type}
-              onClick={() => setRelationType(type)}
-              className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                relationType === type
-                  ? 'bg-sage text-white'
-                  : 'bg-white/70 text-gray-500'
-              }`}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>
-          Contact Source
-        </p>
-        <div className='flex gap-2 flex-wrap'>
-          {CONTACT_SOURCES.map((source) => (
-            <button
-              key={source}
-              onClick={() => setContactSource(source)}
-              className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                contactSource === source
-                  ? 'bg-sage text-white'
-                  : 'bg-white/70 text-gray-500'
-              }`}
-            >
-              {source}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>
-          Collected By
-        </p>
-        <input
-          value={collectedBy}
-          onChange={(e) => setCollectedBy(e.target.value)}
-          placeholder='Collected by'
-          className='w-full h-11 rounded-xl px-4 text-[14px] text-gray-900 bg-white/70 border-none outline-none'
-        />
-      </div>
-
-      <div className='mb-5'>
-        <div className='flex items-center justify-between mb-2.5'>
-          <p className='text-[14px] font-bold text-gray-900'>Notes</p>
-          {!voiceBlob && (
-            <button
-              onClick={() => navigate('/voice-note')}
-              className='h-9 px-4 rounded-full bg-forest text-white text-[13px] font-semibold flex items-center gap-1.5'
-            >
-              <img src='/assets/icons/mic.svg' alt='' className='w-4 h-4' />
-              Voice Note
-            </button>
+      <div className='flex flex-col items-center justify-center py-4'>
+        <div className='relative w-[140px] h-[140px] flex items-center justify-center mb-4'>
+          {recording && (
+            <span className='absolute inset-0 rounded-full bg-sage/40 animate-ping' />
           )}
+
+          <span className='absolute inset-3 rounded-full bg-sage/60' />
+
+          <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
+            {finishing ? (
+              <div className='w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin' />
+            ) : (
+              <img
+                src='/assets/icons/mic-white.svg'
+                alt=''
+                className='w-9 h-9'
+              />
+            )}
+          </span>
         </div>
 
-        {voiceBlob && (
-          <div className='flex items-center gap-3 bg-sage rounded-2xl px-4 py-3.5 mb-3'>
-            <button
-              onClick={toggleVoicePlayback}
-              className='w-9 h-9 rounded-full bg-white/30 flex items-center justify-center shrink-0'
-            >
-              <img
-                src={
-                  isPlaying
-                    ? '/assets/icons/pause.svg'
-                    : '/assets/icons/play.svg'
-                }
-                alt={isPlaying ? 'pause' : 'play'}
-                className='w-4 h-4'
-              />
-            </button>
+        <p className='text-[16px] font-bold text-gray-900'>
+          {finishing ? 'Processing...' : formatTime(seconds)}
+        </p>
 
-            <div className='flex-1 h-1.5 bg-white/40 rounded-full overflow-hidden'>
-              <div
-                className='h-full bg-white rounded-full transition-all'
-                style={{ width: `${playbackProgress}%` }}
-              />
-            </div>
-
-            <button
-              type='button'
-              onClick={removeVoiceNote}
-              className='w-8 h-8 rounded-full bg-white/30 flex items-center justify-center shrink-0'
-            >
-              <img
-                src='/assets/icons/close.svg'
-                alt='remove'
-                className='w-4 h-4'
-              />
-            </button>
-
-            <audio
-              ref={audioRef}
-              src={voiceAudioUrl}
-              onEnded={() => {
-                setIsPlaying(false);
-                setPlaybackProgress(0);
-              }}
-              onTimeUpdate={handleAudioTimeUpdate}
-              className='hidden'
-            />
-          </div>
-        )}
-
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={4}
-          className='w-full rounded-xl px-4 py-3 text-[14px] text-gray-900 bg-white/70 border-none outline-none resize-none'
-        />
+        <p className='text-[12px] text-gray-500 mt-2'>
+          Transcript Length: {transcriptRef.current.length}
+        </p>
       </div>
 
-      <div className='flex items-center justify-between mb-8'>
-        <p className='text-[14px] font-bold text-gray-900'>Set Reminder</p>
+      <div className='flex items-center justify-center gap-10 py-4'>
         <button
-          onClick={() => navigate('/set-reminder')}
-          className={`h-9 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 ${
-            reminder
-              ? 'border-[1.5px] border-forest text-forest bg-transparent'
-              : 'bg-forest text-white'
-          }`}
+          onClick={handleConfirm}
+          disabled={finishing}
+          className='w-14 h-14 rounded-full bg-forest flex items-center justify-center disabled:opacity-60'
         >
           <img
-            src={
-              reminder
-                ? '/assets/icons/check-circle.svg'
-                : '/assets/icons/bell.svg'
-            }
-            alt=''
-            className='w-4 h-4'
+            src='/assets/icons/check.svg'
+            alt='confirm'
+            className='w-6 h-6'
           />
-          {reminder ? 'Remind Set' : 'Remind'}
+        </button>
+
+        <button
+          onClick={handleCancel}
+          disabled={finishing}
+          className='w-14 h-14 rounded-full bg-sage flex items-center justify-center disabled:opacity-60'
+        >
+          <img src='/assets/icons/close.svg' alt='cancel' className='w-5 h-5' />
         </button>
       </div>
 
-      <button
-        onClick={handleSave}
-        disabled={saving || extracting}
-        className='w-full h-12 rounded-full font-semibold text-[15px] bg-forest text-white disabled:opacity-60'
-      >
-        {saving ? 'Saving...' : 'Save'}
-      </button>
+      <div className='flex-1 bg-black rounded-xl p-3 mt-4 overflow-y-auto max-h-[320px] border border-green-500'>
+        <p className='text-green-400 font-mono text-[12px] mb-2'>
+          DEBUG LOG ({debugLog.length})
+        </p>
+
+        {debugLog.length === 0 ? (
+          <p className='text-red-400 text-[11px] font-mono'>No logs yet...</p>
+        ) : (
+          debugLog.map((line, index) => (
+            <div
+              key={index}
+              className='text-green-300 text-[10px] font-mono break-all mb-1'
+            >
+              {index + 1}. {line}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

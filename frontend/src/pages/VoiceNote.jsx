@@ -8,6 +8,7 @@ export default function VoiceNote() {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [finishing, setFinishing] = useState(false);
+  const [debugLog, setDebugLog] = useState([]);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -16,7 +17,13 @@ export default function VoiceNote() {
   const hasStartedRef = useRef(false);
   const transcriptRef = useRef('');
 
-  function log() {}
+  function log(msg) {
+    console.log('[VOICE]', msg);
+    setDebugLog((prev) => [
+      ...prev,
+      `${new Date().toLocaleTimeString()} - ${msg}`,
+    ]);
+  }
 
   useEffect(() => {
     if (hasStartedRef.current) return;
@@ -355,6 +362,10 @@ export default function VoiceNote() {
         <p className='text-[16px] font-bold text-gray-900'>
           {finishing ? 'Processing...' : formatTime(seconds)}
         </p>
+
+        <p className='text-[12px] text-gray-500 mt-2'>
+          Transcript Length: {transcriptRef.current.length}
+        </p>
       </div>
 
       <div className='flex items-center justify-center gap-10 py-4'>
@@ -377,6 +388,25 @@ export default function VoiceNote() {
         >
           <img src='/assets/icons/close.svg' alt='cancel' className='w-5 h-5' />
         </button>
+      </div>
+
+      <div className='flex-1 bg-black rounded-xl p-3 mt-4 overflow-y-auto max-h-[320px] border border-green-500'>
+        <p className='text-green-400 font-mono text-[12px] mb-2'>
+          DEBUG LOG ({debugLog.length})
+        </p>
+
+        {debugLog.length === 0 ? (
+          <p className='text-red-400 text-[11px] font-mono'>No logs yet...</p>
+        ) : (
+          debugLog.map((line, index) => (
+            <div
+              key={index}
+              className='text-green-300 text-[10px] font-mono break-all mb-1'
+            >
+              {index + 1}. {line}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

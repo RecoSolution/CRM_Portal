@@ -5,7 +5,6 @@ let draft = {
   cardImageUrl: null,
   voiceBlob: null,
   voiceTranscript: '',
-  notes: '',
   reminder: null,
   extractedContact: null,
   relationType: '',
@@ -23,17 +22,8 @@ export function setDraft(partial) {
 
 export function clearDraft() {
   draft = {
-    imageData: null,
-    backImageData: null,
-    isBackSideScan: false,
-    cardImageUrl: null,
-    voiceBlob: null,
-    voiceTranscript: '',
-    notes: '',
-    reminder: null,
-    extractedContact: null,
-    relationType: '',
-    contactSource: '',
-    collectedBy: '',
+    imageData: null, backImageData: null, isBackSideScan: false,
+    cardImageUrl: null, voiceBlob: null, voiceTranscript: '', reminder: null,
+    extractedContact: null, relationType: '', contactSource: '', collectedBy: '',
   };
 }
