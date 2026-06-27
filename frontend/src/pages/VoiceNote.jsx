@@ -7,21 +7,14 @@ export default function VoiceNote() {
 
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [transcript, setTranscript] = useState('');
-
-  // Playback state - shown after recording stops, before confirming
-  const [recordedBlob, setRecordedBlob] = useState(null);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackProgress, setPlaybackProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [finishing, setFinishing] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const recognitionRef = useRef(null);
   const timerRef = useRef(null);
   const hasStartedRef = useRef(false);
-  const audioRef = useRef(null);
+  const transcriptRef = useRef(''); // ref instead of state - avoids stale-closure issues
 
   useEffect(() => {
     if (hasStartedRef.current) return;
@@ -32,7 +25,6 @@ export default function VoiceNote() {
       stopTimer();
       recognitionRef.current?.stop();
       mediaRecorderRef.current?.stream?.getTracks().forEach((t) => t.stop());
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, []);
 
@@ -67,20 +59,19 @@ export default function VoiceNote() {
         recognition.interimResults = true;
         recognition.lang = 'en-IN';
 
+        // Store every result directly in a ref (not state) - refs update
+        // synchronously and don't suffer from React's batching delays,
+        // which matters on mobile where onresult can fire right before onend.
         recognition.onresult = (event) => {
           let text = '';
           for (let i = 0; i < event.results.length; i++) {
             text += event.results[i][0].transcript;
           }
-          setTranscript(text);
+          transcriptRef.current = text;
         };
 
         recognition.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
-        };
-
-        recognition.onend = () => {
-          console.log('Speech recognition ended.');
         };
 
         recognition.start();
@@ -98,49 +89,68 @@ export default function VoiceNote() {
     }
   }
 
-  function stopEverything() {
-    recognitionRef.current?.stop();
-    stopTimer();
-    setRecording(false);
-  }
-
   function releaseMicrophone() {
     mediaRecorderRef.current?.stream?.getTracks().forEach((t) => t.stop());
   }
 
-  // Square "stop" button - stops recording, shows playback preview
-  // (no longer used in the current button layout, kept available if needed)
-  function handleStopButton() {
-    if (mediaRecorderRef.current?.state === 'inactive') return;
-
-    mediaRecorderRef.current.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-      setRecordedBlob(blob);
-      setAudioUrl(URL.createObjectURL(blob));
-      releaseMicrophone();
-    };
-    mediaRecorderRef.current.stop();
-    stopEverything();
-  }
-
-  // ✓ Confirm button - stops recording, saves to draft, navigates back
+  // ✓ Confirm button - stops recording AND waits for speech recognition
+  // to fully finish (onend) before navigating, so the transcript is
+  // guaranteed complete. This is the actual fix for the mobile bug -
+  // previously we navigated based on the audio recorder stopping,
+  // without waiting for the separate speech recognition engine to
+  // also finish processing, which is slower and less predictable on mobile.
   function handleConfirm() {
-    if (
-      !mediaRecorderRef.current ||
-      mediaRecorderRef.current.state === 'inactive'
-    ) {
-      navigate('/scanned-card');
-      return;
+    setFinishing(true);
+    stopTimer();
+    setRecording(false);
+
+    const recognition = recognitionRef.current;
+    const recorder = mediaRecorderRef.current;
+
+    let recognitionDone = !recognition; // if no speech API support, treat as already done
+    let recorderDone = false;
+
+    function tryFinish() {
+      if (recognitionDone && recorderDone) {
+        releaseMicrophone();
+        setDraft({
+          voiceBlob: finalBlob,
+          voiceTranscript: transcriptRef.current,
+        });
+        navigate('/scanned-card');
+      }
     }
 
-    mediaRecorderRef.current.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-      setDraft({ voiceBlob: blob, voiceTranscript: transcript });
-      releaseMicrophone();
-      navigate('/scanned-card');
-    };
-    mediaRecorderRef.current.stop();
-    stopEverything();
+    let finalBlob = null;
+
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => {
+        finalBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        recorderDone = true;
+        tryFinish();
+      };
+      recorder.stop();
+    } else {
+      recorderDone = true;
+    }
+
+    if (recognition) {
+      recognition.onend = () => {
+        recognitionDone = true;
+        tryFinish();
+      };
+      recognition.stop();
+    }
+
+    // Safety fallback: if recognition.onend never fires (can happen on
+    // some mobile browsers), force-finish after 2 seconds so the user
+    // is never stuck on a frozen "finishing" screen.
+    setTimeout(() => {
+      if (!recognitionDone) {
+        recognitionDone = true;
+        tryFinish();
+      }
+    }, 2000);
   }
 
   // ✕ Cancel button - discards everything, goes back without saving
@@ -154,38 +164,10 @@ export default function VoiceNote() {
     } else {
       releaseMicrophone();
     }
-    stopEverything();
+    recognitionRef.current?.stop();
+    stopTimer();
+    setRecording(false);
     navigate(-1);
-  }
-
-  // ── Playback controls (used only if recordedBlob exists - preview before confirming) ──
-  function togglePlayback() {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play();
-      setIsPlaying(true);
-    }
-  }
-
-  function handleTimeUpdate() {
-    if (!audioRef.current) return;
-    setPlaybackProgress(audioRef.current.currentTime);
-  }
-
-  function handleLoadedMetadata() {
-    if (!audioRef.current) return;
-    setDuration(audioRef.current.duration);
-  }
-
-  function handleSeek(e) {
-    const newTime = Number(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = newTime;
-      setPlaybackProgress(newTime);
-    }
   }
 
   return (
@@ -208,70 +190,28 @@ export default function VoiceNote() {
           )}
           <span className='absolute inset-3 rounded-full bg-sage/60' />
           <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
-            <img src='/assets/icons/mic-white.svg' alt='' className='w-9 h-9' />
+            {finishing ? (
+              <div className='w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin' />
+            ) : (
+              <img
+                src='/assets/icons/mic-white.svg'
+                alt=''
+                className='w-9 h-9'
+              />
+            )}
           </span>
         </div>
 
         <p className='text-[16px] font-bold text-gray-900'>
-          {formatTime(seconds)}
+          {finishing ? 'Processing...' : formatTime(seconds)}
         </p>
-
-        {transcript && (
-          <p className='text-[12px] text-gray-500 mt-2 px-4 text-center max-w-[280px]'>
-            "{transcript}"
-          </p>
-        )}
-
-        {/* Playback preview - only shows if recording was stopped via handleStopButton,
-            giving a chance to listen back before confirming. Not shown during active recording. */}
-        {audioUrl && (
-          <div className='w-full max-w-[280px] mt-6 flex flex-col items-center gap-2'>
-            <div className='flex items-center gap-3 w-full'>
-              <button
-                onClick={togglePlayback}
-                className='w-9 h-9 rounded-full bg-forest flex items-center justify-center shrink-0'
-              >
-                <img
-                  src={
-                    isPlaying
-                      ? '/assets/icons/pause.svg'
-                      : '/assets/icons/play.svg'
-                  }
-                  alt={isPlaying ? 'pause' : 'play'}
-                  className='w-4 h-4'
-                />
-              </button>
-
-              <input
-                type='range'
-                min='0'
-                max={duration || 0}
-                value={playbackProgress}
-                onChange={handleSeek}
-                className='flex-1 h-1.5 rounded-full accent-forest'
-              />
-            </div>
-            <div className='flex justify-between w-full text-[11px] text-gray-500'>
-              <span>{formatTime(playbackProgress)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onEnded={() => setIsPlaying(false)}
-              className='hidden'
-            />
-          </div>
-        )}
       </div>
 
       <div className='flex items-center justify-center gap-10 pb-6'>
         <button
           onClick={handleConfirm}
-          className='w-14 h-14 rounded-full bg-forest flex items-center justify-center'
+          disabled={finishing}
+          className='w-14 h-14 rounded-full bg-forest flex items-center justify-center disabled:opacity-60'
         >
           <img
             src='/assets/icons/check.svg'
@@ -281,7 +221,8 @@ export default function VoiceNote() {
         </button>
         <button
           onClick={handleCancel}
-          className='w-14 h-14 rounded-full bg-sage flex items-center justify-center'
+          disabled={finishing}
+          className='w-14 h-14 rounded-full bg-sage flex items-center justify-center disabled:opacity-60'
         >
           <img src='/assets/icons/close.svg' alt='cancel' className='w-5 h-5' />
         </button>

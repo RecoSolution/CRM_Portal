@@ -24,7 +24,7 @@ async function recognizeWithOcrSpace(base64Image, mimetype) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData.toString(),
   });
-1
+
   const data = await res.json();
 
   if (data.IsErroredOnProcessing) {
