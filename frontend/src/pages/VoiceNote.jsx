@@ -118,6 +118,14 @@ export default function VoiceNote() {
         recognition.interimResults = true;
         recognition.lang = 'en-IN';
 
+        recognition.onaudiostart = () => log('onaudiostart');
+        recognition.onsoundstart = () => log('onsoundstart');
+        recognition.onspeechstart = () => log('onspeechstart');
+        recognition.onspeechend = () => log('onspeechend');
+        recognition.onsoundend = () => log('onsoundend');
+        recognition.onaudioend = () => log('onaudioend');
+        recognition.onnomatch = () => log('onnomatch');
+
         recognition.onstart = () => {
           log('SpeechRecognition started.');
         };
