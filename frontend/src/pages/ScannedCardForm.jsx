@@ -17,6 +17,7 @@ export default function ScannedCardForm() {
     jobTitle: '',
     company: '',
     phone: '',
+    phone2: '',
     email: '',
     website: '',
     address: '',
@@ -30,9 +31,17 @@ export default function ScannedCardForm() {
   const [collectedBy, setCollectedBy] = useState(
     () => getDraft().collectedBy || '',
   );
+
+  // notes is initialized ONCE from whatever is in the draft at first mount.
+  // After that, it is the single source of truth - we never re-read
+  // getDraft().notes again, and we consume voiceTranscript directly
+  // into this state below, every render, with no dependency-array gating.
   const [notes, setNotes] = useState(() => getDraft().notes || '');
-  const [voiceBlob, setVoiceBlob] = useState(null);
-  const [reminder, setReminder] = useState(null);
+
+  const [voiceBlob, setVoiceBlob] = useState(
+    () => getDraft().voiceBlob || null,
+  );
+  const [reminder, setReminder] = useState(() => getDraft().reminder || null);
   const [extracting, setExtracting] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +51,29 @@ export default function ScannedCardForm() {
   const [voiceAudioUrl, setVoiceAudioUrl] = useState(null);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const audioRef = useRef(null);
+
+  // ── Consume voice transcript - runs on EVERY render, no deps array.
+  //    This guarantees it can never be missed due to remount/effect-timing
+  //    issues. It's safe to run every render because it checks for a
+  //    non-empty value and immediately clears it from the draft after
+  //    consuming, so it only ever fires its body once per actual recording. ──
+  const draftNow = getDraft();
+  if (draftNow.voiceTranscript) {
+    const incoming = draftNow.voiceTranscript;
+    setDraft({ voiceTranscript: '' }); // consume immediately, before any async gap
+
+    setNotes((prev) => {
+      const merged = prev && prev.trim() ? `${prev}\n${incoming}` : incoming;
+      setDraft({ notes: merged });
+      return merged;
+    });
+  }
+  if (draftNow.voiceBlob && !voiceBlob) {
+    setVoiceBlob(draftNow.voiceBlob);
+  }
+  if (draftNow.reminder && !reminder) {
+    setReminder(draftNow.reminder);
+  }
 
   // ── Run OCR + extraction ONCE per scan ──
   useEffect(() => {
@@ -114,8 +146,6 @@ export default function ScannedCardForm() {
 
         const c = res.data.extractedContact;
 
-        // Merge: only fill fields that are currently empty.
-        // Front-side data always takes priority and is never overwritten.
         setForm((prev) => {
           const merged = {
             name: prev.name || c.name || '',
@@ -131,7 +161,6 @@ export default function ScannedCardForm() {
           return merged;
         });
 
-        // Append back-side raw text to the existing raw text for the debug view
         setRawText((prev) =>
           prev
             ? `${prev}\n\n--- BACK SIDE ---\n${res.data.rawText || ''}`
@@ -143,16 +172,12 @@ export default function ScannedCardForm() {
         );
       } finally {
         setExtracting(false);
-        setDraft({ isBackSideScan: false, backImageData: null }); // consume the flag
+        setDraft({ isBackSideScan: false, backImageData: null });
       }
     }
 
     extractBackSide();
   }, []);
-
-  useEffect(() => {
-    setDraft({ notes });
-  }, [notes]);
 
   useEffect(() => {
     if (voiceBlob) {
@@ -175,21 +200,10 @@ export default function ScannedCardForm() {
     setDraft({ relationType, contactSource, collectedBy });
   }, [relationType, contactSource, collectedBy]);
 
-  // ── Pick up voice note / reminder data when page is shown ──
+  // Sync notes to draft on every manual edit too (typing in the textarea)
   useEffect(() => {
-    const d = getDraft();
-    if (d.voiceTranscript) {
-      setNotes((prev) =>
-        prev && prev.includes(d.voiceTranscript)
-          ? prev
-          : prev
-            ? `${prev}\n${d.voiceTranscript}`
-            : d.voiceTranscript,
-      );
-    }
-    if (d.voiceBlob) setVoiceBlob(d.voiceBlob);
-    if (d.reminder) setReminder(d.reminder);
-  }, []);
+    setDraft({ notes });
+  }, [notes]);
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -221,7 +235,7 @@ export default function ScannedCardForm() {
     setIsPlaying(false);
     setPlaybackProgress(0);
     setVoiceBlob(null);
-    setDraft({ voiceBlob: null, voiceTranscript: '' });
+    setDraft({ voiceBlob: null });
   }
 
   async function handleSave() {

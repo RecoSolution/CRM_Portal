@@ -68,7 +68,6 @@ export default function VoiceNote() {
 
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
-
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-IN';
@@ -127,9 +126,13 @@ export default function VoiceNote() {
 
       releaseMicrophone();
 
+      const finalTranscript = transcriptRef.current.trim();
+
+      // Write directly and explicitly - this is the ONLY place
+      // voiceTranscript gets set, right before navigating.
       setDraft({
         voiceBlob: finalBlob,
-        voiceTranscript: transcriptRef.current.trim(),
+        voiceTranscript: finalTranscript,
       });
 
       navigate('/scanned-card');
@@ -211,9 +214,7 @@ export default function VoiceNote() {
           {recording && (
             <span className='absolute inset-0 rounded-full bg-sage/40 animate-ping' />
           )}
-
           <span className='absolute inset-3 rounded-full bg-sage/60' />
-
           <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
             {finishing ? (
               <div className='w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin' />
@@ -236,7 +237,7 @@ export default function VoiceNote() {
         <button
           onClick={handleConfirm}
           disabled={finishing}
-          className='w-14 h-14 rounded-full bg-sage/50 flex items-center justify-center disabled:opacity-60'
+          className='w-14 h-14 rounded-full bg-forest flex items-center justify-center disabled:opacity-60'
         >
           <img
             src='/assets/icons/check.svg'
@@ -248,7 +249,7 @@ export default function VoiceNote() {
         <button
           onClick={handleCancel}
           disabled={finishing}
-          className='w-14 h-14 rounded-full bg-sage/50 flex items-center justify-center disabled:opacity-60'
+          className='w-14 h-14 rounded-full bg-sage flex items-center justify-center disabled:opacity-60'
         >
           <img src='/assets/icons/close.svg' alt='cancel' className='w-5 h-5' />
         </button>
