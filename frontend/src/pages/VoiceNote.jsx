@@ -62,45 +62,45 @@ export default function VoiceNote() {
     try {
       log('Requesting microphone permission...');
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
+      // const stream = await navigator.mediaDevices.getUserMedia({
+      //   audio: true,
+      // });
 
-      log('Microphone permission granted.');
+      // log('Microphone permission granted.');
 
-      const recorder = new MediaRecorder(stream);
+      // const recorder = new MediaRecorder(stream);
 
-      log(`MediaRecorder mimeType: ${recorder.mimeType}`);
-      log(`MediaRecorder state: ${recorder.state}`);
+      // log(`MediaRecorder mimeType: ${recorder.mimeType}`);
+      // log(`MediaRecorder state: ${recorder.state}`);
 
-      chunksRef.current = [];
+      // chunksRef.current = [];
 
-      recorder.onstart = () => {
-        log('Recorder onstart fired.');
-      };
+      // recorder.onstart = () => {
+      //   log('Recorder onstart fired.');
+      // };
 
-      recorder.ondataavailable = (e) => {
-        chunksRef.current.push(e.data);
-        log(
-          `ondataavailable fired. Size=${e.data.size} bytes, chunks=${chunksRef.current.length}`,
-        );
-      };
+      // recorder.ondataavailable = (e) => {
+      //   chunksRef.current.push(e.data);
+      //   log(
+      //     `ondataavailable fired. Size=${e.data.size} bytes, chunks=${chunksRef.current.length}`,
+      //   );
+      // };
 
-      recorder.onerror = (e) => {
-        log(`Recorder error: ${e.error?.message || 'Unknown'}`);
-      };
+      // recorder.onerror = (e) => {
+      //   log(`Recorder error: ${e.error?.message || 'Unknown'}`);
+      // };
 
-      recorder.onpause = () => {
-        log('Recorder paused.');
-      };
+      // recorder.onpause = () => {
+      //   log('Recorder paused.');
+      // };
 
-      recorder.onresume = () => {
-        log('Recorder resumed.');
-      };
+      // recorder.onresume = () => {
+      //   log('Recorder resumed.');
+      // };
 
-      recorder.start();
+      // recorder.start();
 
-      mediaRecorderRef.current = recorder;
+      // mediaRecorderRef.current = recorder;
 
       log('Recorder started successfully.');
 
