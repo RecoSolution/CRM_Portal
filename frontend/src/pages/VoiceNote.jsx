@@ -112,8 +112,11 @@ export default function VoiceNote() {
       if (!SpeechRecognition) {
         log('Browser does not support SpeechRecognition.');
       } else {
+        log(`SpeechRecognition: ${!!window.SpeechRecognition}`);
+        log(`webkitSpeechRecognition: ${!!window.webkitSpeechRecognition}`);
         const recognition = new SpeechRecognition();
-
+        log(`Recognition constructor: ${recognition.constructor.name}`);
+        log(`navigator.onLine: ${navigator.onLine}`);
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-IN';
