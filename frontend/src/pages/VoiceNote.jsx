@@ -16,18 +16,22 @@ export default function VoiceNote() {
   const hasStartedRef = useRef(false);
   const transcriptRef = useRef('');
 
+  function log() {}
+
   useEffect(() => {
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
+
+    log(`UserAgent: ${navigator.userAgent}`);
+    log(`Secure Context: ${window.isSecureContext}`);
+    log(`Origin: ${window.location.origin}`);
 
     startRecording();
 
     return () => {
       stopTimer();
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
-      releaseMicrophone();
+      recognitionRef.current?.stop();
+      mediaRecorderRef.current?.stream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
@@ -49,149 +53,267 @@ export default function VoiceNote() {
 
   async function startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      log('Requesting microphone permission...');
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
+      log('Microphone permission granted.');
 
       const recorder = new MediaRecorder(stream);
+
+      log(`MediaRecorder mimeType: ${recorder.mimeType}`);
+      log(`MediaRecorder state: ${recorder.state}`);
+
       chunksRef.current = [];
 
+      recorder.onstart = () => {
+        log('Recorder onstart fired.');
+      };
+
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
+        chunksRef.current.push(e.data);
+        log(
+          `ondataavailable fired. Size=${e.data.size} bytes, chunks=${chunksRef.current.length}`,
+        );
+      };
+
+      recorder.onerror = (e) => {
+        log(`Recorder error: ${e.error?.message || 'Unknown'}`);
+      };
+
+      recorder.onpause = () => {
+        log('Recorder paused.');
+      };
+
+      recorder.onresume = () => {
+        log('Recorder resumed.');
       };
 
       recorder.start();
+
       mediaRecorderRef.current = recorder;
+
+      log('Recorder started successfully.');
 
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
 
-      if (SpeechRecognition) {
+      log(`SpeechRecognition available: ${!!SpeechRecognition}`);
+
+      if (!SpeechRecognition) {
+        log('Browser does not support SpeechRecognition.');
+      } else {
+        log(`SpeechRecognition: ${!!window.SpeechRecognition}`);
+        log(`webkitSpeechRecognition: ${!!window.webkitSpeechRecognition}`);
         const recognition = new SpeechRecognition();
+        log(`Recognition constructor: ${recognition.constructor.name}`);
+        log(`navigator.onLine: ${navigator.onLine}`);
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-IN';
 
+        recognition.onaudiostart = () => log('onaudiostart');
+        recognition.onsoundstart = () => log('onsoundstart');
+        recognition.onspeechstart = () => log('onspeechstart');
+        recognition.onspeechend = () => log('onspeechend');
+        recognition.onsoundend = () => log('onsoundend');
+        recognition.onaudioend = () => log('onaudioend');
+        recognition.onnomatch = () => log('onnomatch');
+
+        recognition.onstart = () => {
+          log('SpeechRecognition started.');
+        };
+
+        recognition.onaudiostart = () => {
+          log('Audio capture started.');
+        };
+
+        recognition.onsoundstart = () => {
+          log('Sound detected.');
+        };
+
+        recognition.onspeechstart = () => {
+          log('Speech started.');
+        };
+
         recognition.onresult = (event) => {
           let text = '';
+
           for (let i = 0; i < event.results.length; i++) {
             text += event.results[i][0].transcript;
           }
-          transcriptRef.current = text.trim();
+
+          transcriptRef.current = text;
+
+          log(`Transcript updated (${text.length} chars): "${text}"`);
+        };
+        recognition.onerror = (event) => {
+          log(
+            `SpeechRecognition ERROR -> ${event.error} ${event.message || ''}`,
+          );
         };
 
-        recognition.onerror = () => {};
-        recognition.onend = () => {};
+        recognition.onnomatch = () => {
+          log('SpeechRecognition onnomatch fired.');
+        };
+
+        recognition.onspeechend = () => {
+          log('Speech ended.');
+        };
+
+        recognition.onsoundend = () => {
+          log('Sound ended.');
+        };
+
+        recognition.onaudioend = () => {
+          log('Audio capture ended.');
+        };
+
+        recognition.onend = () => {
+          log(
+            `SpeechRecognition ended. Final transcript="${transcriptRef.current}"`,
+          );
+        };
 
         try {
           recognition.start();
           recognitionRef.current = recognition;
+          log('recognition.start() called successfully.');
         } catch (err) {
-          console.error(err);
+          log(`recognition.start() threw error: ${err.message}`);
         }
       }
 
       setRecording(true);
       startTimer();
     } catch (err) {
-      console.error('Microphone access denied', err);
-      alert(
-        'Could not access microphone. Please check permissions and try again.',
-      );
+      log(`getUserMedia ERROR: ${err.message}`);
+      setRecording(false);
     }
   }
 
   function releaseMicrophone() {
-    mediaRecorderRef.current?.stream
-      ?.getTracks()
-      .forEach((track) => track.stop());
+    log('Releasing microphone tracks...');
+    mediaRecorderRef.current?.stream?.getTracks().forEach((track) => {
+      log(`Stopping track: ${track.kind}`);
+      track.stop();
+    });
   }
 
   function handleConfirm() {
-    if (finishing) return;
+    log('Confirm button pressed.');
 
     setFinishing(true);
-    setRecording(false);
     stopTimer();
+    setRecording(false);
 
-    const recorder = mediaRecorderRef.current;
     const recognition = recognitionRef.current;
+    const recorder = mediaRecorderRef.current;
 
-    let recorderDone = false;
     let recognitionDone = !recognition;
+    let recorderDone = false;
     let finalBlob = null;
 
-    function finishIfReady() {
-      if (!recorderDone || !recognitionDone) return;
+    function tryFinish() {
+      log(
+        `tryFinish -> recognitionDone=${recognitionDone}, recorderDone=${recorderDone}`,
+      );
+
+      if (!recognitionDone || !recorderDone) return;
+
+      log(`Saving draft. Transcript length=${transcriptRef.current.length}`);
+
+      if (finalBlob) {
+        log(`Blob size=${finalBlob.size} bytes`);
+      }
+
+      setDraft({
+        voiceBlob: finalBlob,
+        voiceTranscript: transcriptRef.current,
+      });
+
+      log('Draft saved successfully.');
 
       releaseMicrophone();
 
-      const finalTranscript = transcriptRef.current.trim();
+      log('Navigating to /scanned-card in 3 seconds...');
 
-      // Write directly and explicitly - this is the ONLY place
-      // voiceTranscript gets set, right before navigating.
-      setDraft({
-        voiceBlob: finalBlob,
-        voiceTranscript: finalTranscript,
-      });
-
-      navigate('/scanned-card');
+      setTimeout(() => {
+        navigate('/scanned-card');
+      }, 3000);
     }
 
     if (recorder && recorder.state !== 'inactive') {
+      log(`Stopping recorder. Current state=${recorder.state}`);
+
       recorder.onstop = () => {
         finalBlob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
+          type: 'audio/webm',
         });
+
         recorderDone = true;
-        finishIfReady();
+
+        log(`Recorder stopped. Blob created (${finalBlob.size} bytes).`);
+
+        tryFinish();
       };
+
       recorder.stop();
     } else {
+      log('Recorder already inactive.');
       recorderDone = true;
     }
 
     if (recognition) {
       recognition.onend = () => {
         recognitionDone = true;
-        finishIfReady();
+
+        log(
+          `Recognition finished during confirm. Transcript="${transcriptRef.current}"`,
+        );
+
+        tryFinish();
       };
 
       try {
         recognition.stop();
-      } catch {
-        recognitionDone = true;
-        finishIfReady();
+        log('recognition.stop() called.');
+      } catch (err) {
+        log(`recognition.stop() ERROR: ${err.message}`);
       }
     }
 
     setTimeout(() => {
       if (!recognitionDone) {
+        log('Safety timeout reached (2s). Forcing recognitionDone=true');
         recognitionDone = true;
-        finishIfReady();
+        tryFinish();
       }
     }, 2000);
   }
 
   function handleCancel() {
-    if (finishing) return;
-
-    stopTimer();
-    setRecording(false);
-
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
+    log('Cancel pressed.');
 
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== 'inactive'
     ) {
-      mediaRecorderRef.current.onstop = releaseMicrophone;
+      mediaRecorderRef.current.onstop = () => {
+        releaseMicrophone();
+      };
+
       mediaRecorderRef.current.stop();
     } else {
       releaseMicrophone();
     }
+
+    recognitionRef.current?.stop();
+
+    stopTimer();
+    setRecording(false);
 
     navigate(-1);
   }
@@ -200,7 +322,7 @@ export default function VoiceNote() {
     <div className='max-w-[480px] mx-auto min-h-screen bg-bg px-6 pt-5 pb-10 flex flex-col'>
       <button
         onClick={handleCancel}
-        className='w-10 h-10 flex items-center justify-center -ml-2 mb-10'
+        className='w-10 h-10 flex items-center justify-center -ml-2 mb-4'
       >
         <img
           src='/assets/icons/arrow-left.svg'
@@ -209,15 +331,17 @@ export default function VoiceNote() {
         />
       </button>
 
-      <div className='flex-1 flex flex-col items-center justify-center'>
-        <div className='relative w-[200px] h-[200px] flex items-center justify-center mb-6'>
+      <div className='flex flex-col items-center justify-center py-4'>
+        <div className='relative w-[140px] h-[140px] flex items-center justify-center mb-4'>
           {recording && (
             <span className='absolute inset-0 rounded-full bg-sage/40 animate-ping' />
           )}
+
           <span className='absolute inset-3 rounded-full bg-sage/60' />
+
           <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
             {finishing ? (
-              <div className='w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin' />
+              <div className='w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin' />
             ) : (
               <img
                 src='/assets/icons/mic-white.svg'
@@ -233,7 +357,7 @@ export default function VoiceNote() {
         </p>
       </div>
 
-      <div className='flex items-center justify-center gap-10 pb-6'>
+      <div className='flex items-center justify-center gap-10 py-4'>
         <button
           onClick={handleConfirm}
           disabled={finishing}
