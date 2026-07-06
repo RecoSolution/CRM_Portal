@@ -20,10 +20,26 @@ import VoiceNote from './pages/VoiceNote';
 import SetReminder from './pages/SetReminder';
 import Contacts from './pages/Contacts';
 import ContactDetail from './pages/ContactDetail';
-import Followups from './pages/Followups';
+import Tasks from './pages/Tasks';
+import CreateTask from './pages/CreateTask';
+import SortTasks from './pages/SortTasks';
+import TeamDashboard from './pages/TeamDashboard';
+import UnassignedContacts from './pages/UnassignedContacts';
+import TaskDetail from './pages/TaskDetail';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import FilterContacts from './pages/FilterContacts';
+import ExportContacts from './pages/ExportContacts';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import RescheduleTask from './pages/RescheduleTask';
+import EditTask from './pages/EditTask';
+import MyAssignedContacts from './pages/MyAssignedContacts';
+import RecentContacts from './pages/RecentContacts';
+import HelpSupport from './pages/HelpSupport';
+import FAQ from './pages/FAQ';
+import ContactSupport from './pages/ContactSupport';
+import ReportIssue from './pages/ReportIssue';
+import AboutApp from './pages/AboutApp';
 
 function Gate({ children }) {
   const { user, loading } = useAuth();
@@ -162,10 +178,50 @@ export default function App() {
             }
           />
           <Route
-            path='/followups'
+            path='/tasks'
             element={
               <Gate>
-                <Followups />
+                <Tasks />
+              </Gate>
+            }
+          />
+          <Route
+            path='/tasks/sort'
+            element={
+              <Gate>
+                <SortTasks />
+              </Gate>
+            }
+          />
+          <Route
+            path='/tasks/create'
+            element={
+              <Gate>
+                <CreateTask />
+              </Gate>
+            }
+          />
+          <Route
+            path='/team-dashboard'
+            element={
+              <Gate>
+                <TeamDashboard />
+              </Gate>
+            }
+          />
+          <Route
+            path='/admin/unassigned-contacts'
+            element={
+              <Gate>
+                <UnassignedContacts />
+              </Gate>
+            }
+          />
+          <Route
+            path='/tasks/:id'
+            element={
+              <Gate>
+                <TaskDetail />
               </Gate>
             }
           />
@@ -194,10 +250,98 @@ export default function App() {
             }
           />
           <Route
+            path='/contacts/export'
+            element={
+              <Gate>
+                <ExportContacts />
+              </Gate>
+            }
+          />
+          <Route
             path='/contacts/filters'
             element={
               <Gate>
                 <FilterContacts />
+              </Gate>
+            }
+          />
+          <Route
+            path='/privacy-policy'
+            element={
+              <Gate>
+                <PrivacyPolicy />
+              </Gate>
+            }
+          />
+          <Route
+            path='/tasks/:id/reschedule'
+            element={
+              <Gate>
+                <RescheduleTask />
+              </Gate>
+            }
+          />
+          <Route
+            path='/tasks/:id/edit'
+            element={
+              <Gate>
+                <EditTask />
+              </Gate>
+            }
+          />
+          <Route
+            path='/contacts/my-assigned'
+            element={
+              <Gate>
+                <MyAssignedContacts />
+              </Gate>
+            }
+          />
+          <Route
+            path='/contacts/recent'
+            element={
+              <Gate>
+                <RecentContacts />
+              </Gate>
+            }
+          />
+          <Route
+            path='/help-support'
+            element={
+              <Gate>
+                <HelpSupport />
+              </Gate>
+            }
+          />
+          <Route
+            path='/help-support/faq'
+            element={
+              <Gate>
+                <FAQ />
+              </Gate>
+            }
+          />
+          <Route
+            path='/help-support/contact'
+            element={
+              <Gate>
+                <ContactSupport />
+              </Gate>
+            }
+          />
+          <Route
+            path='/help-support/report'
+            element={
+              <Gate>
+                <ReportIssue />
+              </Gate>
+            }
+          />
+          <Route
+            path='/about-app'
+            element={
+              <Gate>
+                <AboutApp />
               </Gate>
             }
           />

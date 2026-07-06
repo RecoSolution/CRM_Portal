@@ -1,5 +1,7 @@
 import Contact from '../models/Contact.js';
 import asyncHandler from '../utils/asyncHandler.js';
+import Task from '../models/Task.js';
+import { applyRoleScope } from '../utils/authScope.js';
 
 // ────────────────────────────────────────────────────────
 // @route   GET /api/dashboard/stats
@@ -50,6 +52,44 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     },
     recentContacts,
     todayReminders: todayRemindersContacts,
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// @route   GET /api/dashboard/home
+// @desc    Employee dashboard — own task snapshot (Founder sees org-wide)
+// @access  Private
+// ────────────────────────────────────────────────────────
+export const getHomeDashboard = asyncHandler(async (req, res) => {
+  const { scope } = req.query; // 'mine' forces personal tasks even for a Founder
+
+  const taskQuery =
+    scope === 'mine'
+      ? { assignedEmployee: req.user.id }
+      : applyRoleScope(req, {}, 'assignedEmployee');
+
+  const [overdue, today, upcoming, completed, recentContacts, assignedCount, assignedContactsCount, unassignedContactsCount] =
+    await Promise.all([
+      Task.countDocuments({ ...taskQuery, status: 'Overdue' }),
+      Task.countDocuments({ ...taskQuery, status: 'Today' }),
+      Task.countDocuments({ ...taskQuery, status: 'Upcoming' }),
+      Task.countDocuments({ ...taskQuery, status: 'Completed' }),
+      Contact.find(req.user.role === 'founder' ? {} : { owner: req.user.id })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('name company leadCategory createdAt'),
+      Task.countDocuments(taskQuery),
+      Contact.countDocuments({ assignedTo: req.user.id }),
+      req.user.role === 'founder' ? Contact.countDocuments({ assignedTo: null }) : Promise.resolve(0),
+    ]);
+
+  res.json({
+    success: true,
+    tasks: { overdue, today, upcoming, completed },
+    recentContacts,
+    assignedCount,
+    assignedContactsCount,
+    unassignedContactsCount,
   });
 });
 

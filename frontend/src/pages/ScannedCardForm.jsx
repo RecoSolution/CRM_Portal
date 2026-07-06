@@ -314,7 +314,11 @@ export default function ScannedCardForm() {
         )}
         {extracting && (
           <div className='absolute inset-0 bg-white/80 flex items-center justify-center gap-2'>
-            <div className='w-5 h-5 border-2 border-forest border-t-transparent rounded-full animate-spin' />
+            <div className='flex items-center gap-1.5'>
+          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
+        </div>
             <span className='text-[13px] font-medium text-gray-700'>
               Reading card...
             </span>

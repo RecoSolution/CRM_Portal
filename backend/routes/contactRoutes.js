@@ -11,7 +11,8 @@ import {
   checkDuplicate,
   mergeContact,
   updateReminderStatus,
-  getAllReminders
+  getAllReminders,
+  exportContacts
 } from '../controllers/contactController.js';
 import { protect, verifiedOnly } from '../middleware/auth.js';
 
@@ -23,6 +24,7 @@ router.use(protect, verifiedOnly);
 router.get('/reminders/all', getAllReminders)
 router.get('/reminders/today', getTodayReminders);
 router.get('/check-duplicate', checkDuplicate);
+router.get('/export', exportContacts);
 
 router.route('/').get(getContacts).post(createContact);
 

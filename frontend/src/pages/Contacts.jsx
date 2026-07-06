@@ -48,7 +48,7 @@ export default function Contacts() {
       if (advancedFilters.currentStage) {
         params.stage = advancedFilters.currentStage
           .toLowerCase()
-          .replace(/\s+/g, '_');
+          .replace(/[\s-]+/g, '_');
       }
 
       const res = await api.get('/contacts', { params });
@@ -62,8 +62,13 @@ export default function Contacts() {
 
   function getInitials(name) {
     if (!name) return '?';
-    return name
-      .split(' ')
+    // Strip anything that isn't a letter or whitespace (bullets, dashes,
+    // dots, etc.) so symbols never end up rendered as an "initial".
+    const cleaned = name.replace(/[^a-zA-Z\s]/g, '').trim();
+    if (!cleaned) return '?';
+    return cleaned
+      .split(/\s+/)
+      .filter(Boolean)
       .map((p) => p[0])
       .join('')
       .slice(0, 2)
@@ -145,7 +150,11 @@ export default function Contacts() {
       <div className='flex-1 px-5 pb-10 overflow-y-auto'>
         {loading ? (
           <div className='flex items-center justify-center py-20'>
-            <div className='w-7 h-7 border-2 border-forest border-t-transparent rounded-full animate-spin' />
+            <div className='flex items-center gap-1.5'>
+          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
+        </div>
           </div>
         ) : contacts.length === 0 ? (
           <div className='flex flex-col items-center justify-center py-20 text-center'>

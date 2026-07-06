@@ -1,17 +1,21 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-bg: #F5F5F5;
+  --color-bg: #f5f5f5;
   --color-forest: #406550;
-  --color-sage: #799A85;
+  --color-sage: #799a85;
 }
 
 * {
   box-sizing: border-box;
+  font-family: "Lexend", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
-  background-color: #F5F5F5;
+  background-color: #f5f5f5;
 }

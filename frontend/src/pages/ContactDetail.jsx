@@ -12,6 +12,12 @@ export default function ContactDetail() {
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [reminderTask, setReminderTask] = useState('follow_up');
+  const [reminderDate, setReminderDate] = useState('');
+  const [reminderTime, setReminderTime] = useState('');
+  const [reminderPriority, setReminderPriority] = useState('medium');
+  const [savingReminder, setSavingReminder] = useState(false);
 
   const [team, setTeam] = useState([]);
   const [assigning, setAssigning] = useState(false);
@@ -68,6 +74,27 @@ export default function ContactDetail() {
     }
   }
 
+  async function submitReminder() {
+    if (!reminderDate) return;
+    setSavingReminder(true);
+    try {
+      await api.post(`/contacts/${id}/reminders`, {
+        task: reminderTask,
+        dueDate: reminderDate,
+        time: reminderTime,
+        priority: reminderPriority,
+      });
+      setShowReminderForm(false);
+      setReminderDate('');
+      setReminderTime('');
+      fetchContact();
+    } catch (err) {
+      console.error('Could not add reminder', err);
+    } finally {
+      setSavingReminder(false);
+    }
+  }
+
   async function handleDelete() {
     try {
       await api.delete(`/contacts/${id}`);
@@ -79,8 +106,13 @@ export default function ContactDetail() {
 
   function getInitials(name) {
     if (!name) return '?';
-    return name
-      .split(' ')
+    // Strip anything that isn't a letter or whitespace (bullets, dashes,
+    // dots, etc.) so symbols never end up rendered as an "initial".
+    const cleaned = name.replace(/[^a-zA-Z\s]/g, '').trim();
+    if (!cleaned) return '?';
+    return cleaned
+      .split(/\s+/)
+      .filter(Boolean)
       .map((p) => p[0])
       .join('')
       .slice(0, 2)
@@ -107,7 +139,20 @@ export default function ContactDetail() {
   if (loading) {
     return (
       <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
-        <div className='w-8 h-8 border-2 border-forest border-t-transparent rounded-full animate-spin' />
+        <div className='flex items-center gap-1.5'>
+          <span
+            className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
+            style={{ animationDelay: '0ms' }}
+          />
+          <span
+            className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
+            style={{ animationDelay: '150ms' }}
+          />
+          <span
+            className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
+            style={{ animationDelay: '300ms' }}
+          />
+        </div>
       </div>
     );
   }
@@ -326,6 +371,82 @@ export default function ContactDetail() {
         </>
       )}
 
+      {!showReminderForm ? (
+        <button
+          onClick={() => setShowReminderForm(true)}
+          className='w-full h-11 rounded-full border-[1.5px] border-forest text-forest text-[13px] font-semibold mb-4'
+        >
+          + Add Reminder
+        </button>
+      ) : (
+        <div className='bg-white rounded-2xl p-4 mb-4'>
+          <p className='text-[13px] font-semibold text-gray-600 mb-2'>Task</p>
+          <select
+            value={reminderTask}
+            onChange={(e) => setReminderTask(e.target.value)}
+            className='w-full h-11 rounded-xl px-3 mb-3 text-[14px] bg-white border border-forest/30 outline-none'
+          >
+            <option value='call'>Call</option>
+            <option value='send_quotation'>Send Quotation</option>
+            <option value='schedule_meeting'>Schedule Meeting</option>
+            <option value='follow-up'>Follow-up</option>
+            <option value='email'>Email</option>
+          </select>
+
+          <div className='flex gap-2 mb-3'>
+            <input
+              type='date'
+              value={reminderDate}
+              onChange={(e) => setReminderDate(e.target.value)}
+              className='flex-1 h-11 rounded-xl px-3 text-[14px] bg-white border border-forest/30 outline-none'
+            />
+            <input
+              type='time'
+              value={reminderTime}
+              onChange={(e) => setReminderTime(e.target.value)}
+              className='flex-1 h-11 rounded-xl px-3 text-[14px] bg-white border border-forest/30 outline-none'
+            />
+          </div>
+
+          <div className='flex gap-4 mb-4'>
+            {['low', 'medium', 'high'].map((p) => (
+              <button
+                key={p}
+                onClick={() => setReminderPriority(p)}
+                className='flex items-center gap-2'
+              >
+                <span
+                  className={`w-4 h-4 rounded-full border-2 border-gray-400 flex items-center justify-center ${reminderPriority === p ? 'border-forest' : ''}`}
+                >
+                  {reminderPriority === p && (
+                    <span className='w-2 h-2 rounded-full bg-forest' />
+                  )}
+                </span>
+                <span className='text-[13px] text-gray-700 capitalize'>
+                  {p}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className='flex gap-2'>
+            <button
+              onClick={() => setShowReminderForm(false)}
+              className='flex-1 h-10 rounded-full border border-gray-300 text-gray-600 text-[13px] font-semibold'
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submitReminder}
+              disabled={savingReminder || !reminderDate}
+              className='flex-1 h-10 rounded-full bg-forest text-white text-[13px] font-semibold disabled:opacity-60'
+            >
+              {savingReminder ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Notes */}
       {contact.notes?.length > 0 && (
         <>
@@ -341,27 +462,27 @@ export default function ContactDetail() {
       )}
 
       {/* Voice Note */}
-{contact.notes?.some((n) => n.audioUrl?.trim()) && (
-  <>
-    <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
-      Voice Note
-    </p>
+      {contact.notes?.some((n) => n.audioUrl?.trim()) && (
+        <>
+          <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
+            Voice Note
+          </p>
 
-    {contact.notes
-      .filter((n) => n.audioUrl?.trim())
-      .map((n) => (
-        <audio
-          key={n._id}
-          controls
-          preload='metadata'
-          className='w-full mb-4 rounded-xl'
-        >
-          <source src={n.audioUrl} type='audio/webm' />
-          Your browser does not support the audio element.
-        </audio>
-      ))}
-  </>
-)}
+          {contact.notes
+            .filter((n) => n.audioUrl?.trim())
+            .map((n) => (
+              <audio
+                key={n._id}
+                controls
+                preload='metadata'
+                className='w-full mb-4 rounded-xl'
+              >
+                <source src={n.audioUrl} type='audio/webm' />
+                Your browser does not support the audio element.
+              </audio>
+            ))}
+        </>
+      )}
 
       {/* Card image */}
       {contact.cardImageUrl && (

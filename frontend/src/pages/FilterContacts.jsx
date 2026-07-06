@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../utils/api';
 
 const RELATIONSHIP_TYPES = ['Lead', 'Vendor', 'Customer', 'Partner', 'Team', 'Investor', 'General'];
-const CONTACT_SOURCES = ['Exhibition', 'Factory Visit', 'Conference', 'Panel Discussion', 'General', 'Referral'];
+const CONTACT_SOURCES = ['GREENS 2026', 'Factory Visit', 'GCPRS 2026', 'Other'];
 const CURRENT_STAGES = ['New Contact', 'Follow-up Due', 'Negotiation', 'Quotation Sent', 'Quotation Pending', 'Closed'];
 
 export default function FilterContacts() {

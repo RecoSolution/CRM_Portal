@@ -55,7 +55,11 @@ export default function Notifications() {
       <div className='flex-1 px-5 pt-5 pb-10 overflow-y-auto'>
         {loading ? (
           <div className='flex items-center justify-center py-20'>
-            <div className='w-7 h-7 border-2 border-forest border-t-transparent rounded-full animate-spin' />
+            <div className='flex items-center gap-1.5'>
+          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
+        </div>
           </div>
         ) : reminders.length === 0 ? (
           <div className='flex flex-col items-center justify-center py-20 text-center'>

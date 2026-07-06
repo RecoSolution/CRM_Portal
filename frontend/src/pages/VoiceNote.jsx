@@ -341,7 +341,20 @@ export default function VoiceNote() {
 
           <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
             {finishing ? (
-              <div className='w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin' />
+              <div className='flex items-center gap-1.5'>
+                <span
+                  className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
+                  style={{ animationDelay: '0ms' }}
+                />
+                <span
+                  className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
+                  style={{ animationDelay: '150ms' }}
+                />
+                <span
+                  className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
+                  style={{ animationDelay: '300ms' }}
+                />
+              </div>
             ) : (
               <img
                 src='/assets/icons/mic-white.svg'
