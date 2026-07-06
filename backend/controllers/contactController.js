@@ -59,12 +59,12 @@ const getContacts = asyncHandler(async (req, res) => {
       status: { $ne: 'Completed' },
     })
       .sort({ dueDate: 1 })
-      .select('contact taskType');
+      .select('contact taskType _id');
 
     const taskByContact = {};
     openTasks.forEach((t) => {
       const key = t.contact.toString();
-      if (!taskByContact[key]) taskByContact[key] = t.taskType; // earliest due wins
+      if (!taskByContact[key]) taskByContact[key] = t; // earliest due wins
     });
 
     const LABEL_MAP = {
@@ -78,11 +78,12 @@ const getContacts = asyncHandler(async (req, res) => {
 
     contactsOut = contacts.map((c) => {
       const obj = c.toObject();
-      const taskType = taskByContact[c._id.toString()];
-      obj.taskStatusLabel = taskType ? LABEL_MAP[taskType] : null;
+      const openTask = taskByContact[c._id.toString()];
+      obj.taskStatusLabel = openTask ? LABEL_MAP[openTask.taskType] : null;
+      obj.openTaskId = openTask ? openTask._id : null;
       return obj;
     });
-  }
+  } // ← closes the `if (req.query.includeTaskStatus === 'true')` block
 
   res.json({
     success: true,
@@ -92,6 +93,7 @@ const getContacts = asyncHandler(async (req, res) => {
     contacts: contactsOut,
   });
 });
+
 
 // ────────────────────────────────────────────────────────
 // @route   GET /api/contacts/:id
@@ -122,7 +124,22 @@ const getContact = asyncHandler(async (req, res) => {
 // @access  Private
 // ────────────────────────────────────────────────────────
 const exportContacts = asyncHandler(async (req, res) => {
-  const { scope = 'all', type, dateFrom, dateTo, format = 'csv' } = req.query;
+  const { scope = 'all', type, dateFrom, dateTo, format = 'csv', contactId } = req.query;
+
+  // Single-contact export bypasses scope/type/date filters entirely —
+  // still respects role visibility via applyContactScope underneath.
+  if (contactId) {
+    const scopedQuery = { _id: contactId, ...applyContactScope(req) };
+    const contact = await Contact.findOne(scopedQuery)
+      .populate('assignedTo', 'firstName lastName')
+      .populate('owner', 'firstName lastName');
+
+    if (!contact) {
+      return res.status(404).json({ success: false, message: 'Contact not found.' });
+    }
+
+    return sendContactFile(res, [contact], format, contact.name || 'contact');
+  }
 
   // Base visibility always respects role — an Employee exporting
   // "All Contacts" still only gets what they're allowed to see.
@@ -179,6 +196,35 @@ const exportContacts = asyncHandler(async (req, res) => {
     c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-US') : '',
   ]);
 
+  return sendContactFile(res, contacts, format, 'contacts-export');
+});
+
+// ── Shared file-writer for both bulk and single-contact export ──
+async function sendContactFile(res, contacts, format, filenameBase) {
+  const headers = [
+    'Name', 'Company', 'Designation', 'Email', 'Phone', 'Website',
+    'Address', 'Relationship Type', 'Category', 'Lead Score',
+    'Lead Category', 'Assigned To', 'Added By', 'Created At',
+  ];
+  const rows = contacts.map((c) => [
+    c.name || '',
+    c.company || '',
+    c.designation || '',
+    c.email || '',
+    c.phone || '',
+    c.website || '',
+    c.address || '',
+    c.relationshipType || '',
+    c.category || '',
+    c.leadScore ?? '',
+    c.leadCategory || '',
+    c.assignedTo ? `${c.assignedTo.firstName} ${c.assignedTo.lastName}` : '',
+    c.owner ? `${c.owner.firstName} ${c.owner.lastName}` : '',
+    c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-US') : '',
+  ]);
+
+  const safeName = filenameBase.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'contact';
+
   if (format === 'xlsx') {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Contacts');
@@ -190,27 +236,18 @@ const exportContacts = asyncHandler(async (req, res) => {
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="contacts-export.xlsx"',
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
     await workbook.xlsx.write(res);
     return res.end();
   }
 
-  // Default: CSV
   const escapeCell = (val) => `"${String(val).replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows]
-    .map((row) => row.map(escapeCell).join(','))
-    .join('\n');
+  const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(',')).join('\n');
 
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename="contacts-export.csv"',
-  );
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}.csv"`);
   res.status(200).send(csv);
-});
+}
 
 // ────────────────────────────────────────────────────────
 // @route   GET /api/contacts/check-duplicate

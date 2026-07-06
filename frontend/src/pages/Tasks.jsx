@@ -3,21 +3,26 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
-const QUICK_FILTERS = ['All', 'Overdue', 'Today'];
+const QUICK_FILTERS = ['All', 'Overdue', 'Today']
+const VALID_FILTERS = ['overdue', 'today', 'upcoming', 'completed', 'pending']
 
 export default function Tasks() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const location = useLocation();
-  const isFounder = user?.role === 'founder';
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const isFounder = user?.role === 'founder'
 
-  const [scope, setScope] = useState('team'); // 'team' | 'my' — founder only
-  const [quickFilter, setQuickFilter] = useState(
-    QUICK_FILTERS.find(
-      (f) => f.toLowerCase() === searchParams.get('filter')?.toLowerCase(),
-    ) || 'All',
-  );
+  const [scope, setScope] = useState('team') // 'team' | 'my' — founder only
+
+  // Accept ANY valid deep-linked filter (not just the 3 visible pills) —
+  // Team Dashboard / Home link to upcoming/completed/pending too, even
+  // though those aren't shown as pills on this page.
+  const initialFilterParam = searchParams.get('filter')?.toLowerCase()
+  const [quickFilter, setQuickFilter] = useState(() => {
+    if (!initialFilterParam || !VALID_FILTERS.includes(initialFilterParam)) return 'All'
+    return initialFilterParam.charAt(0).toUpperCase() + initialFilterParam.slice(1)
+  })
   const [sortFilters, setSortFilters] = useState(location.state?.filters || {});
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +44,8 @@ export default function Tasks() {
       const params = {};
 
       if (quickFilter !== 'All') params.filter = quickFilter.toLowerCase();
-      if (isFounder && scope === 'my') params.assignedEmployee = user._id;
+      if (isFounder && scope === 'my') params.createdBy = user._id
+      if (isFounder && scope === 'team') params.teamView = 'true'
 
       if (sortFilters.taskType) params.taskType = sortFilters.taskType;
       if (sortFilters.dueType) params.filter = sortFilters.dueType; // overrides quick filter if set from Sort screen
@@ -71,17 +77,31 @@ export default function Tasks() {
       .toUpperCase();
   }
 
-  function timeAgo(dateStr) {
-    if (!dateStr) return '';
-    const diffMs = Date.now() - new Date(dateStr).getTime();
-    const diffHrs = Math.floor(diffMs / 3600000);
-    const time = new Date(dateStr)
-      .toLocaleTimeString('en-US', { hour: 'numeric', minute: undefined })
-      .toLowerCase()
-      .replace(' ', '');
-    if (diffHrs < 24) return `Today | ${time}`;
-    if (diffHrs < 48) return `Yesterday | ${time}`;
-    return `${new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} | ${time}`;
+  function formatDueDisplay(task) {
+    if (!task.dueDate) return 'No due date'
+
+    const due = new Date(task.dueDate)
+    const now = new Date()
+    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const diffDays = Math.round((dueDay - today) / 86400000)
+
+    const timeLabel = task.dueTime
+      ? (() => {
+          const [h, m] = task.dueTime.split(':').map(Number)
+          const d = new Date()
+          d.setHours(h, m)
+          return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: m ? '2-digit' : undefined }).toLowerCase().replace(' ', '')
+        })()
+      : null
+
+    let dayLabel
+    if (diffDays === 0) dayLabel = 'Today'
+    else if (diffDays === -1) dayLabel = 'Yesterday'
+    else if (diffDays === 1) dayLabel = 'Tomorrow'
+    else dayLabel = due.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+
+    return timeLabel ? `${dayLabel} | ${timeLabel}` : dayLabel
   }
 
   return (
@@ -194,9 +214,7 @@ export default function Tasks() {
                     <span className='inline-block mt-1.5 px-3 py-1 rounded-full bg-forest/10 text-forest text-[12px] font-medium'>
                       {t.title}
                     </span>
-                    <p className='text-[11px] text-gray-400 mt-1.5'>
-                      {timeAgo(t.createdAt)}
-                    </p>
+                    <p className="text-[11px] text-gray-400 mt-1.5">{formatDueDisplay(t)}</p>
                   </div>
                 </div>
               </button>

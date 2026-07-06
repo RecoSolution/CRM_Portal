@@ -18,9 +18,11 @@ export default function ContactDetail() {
   const [reminderTime, setReminderTime] = useState('');
   const [reminderPriority, setReminderPriority] = useState('medium');
   const [savingReminder, setSavingReminder] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
 
   const [team, setTeam] = useState([]);
   const [assigning, setAssigning] = useState(false);
+  const [menuBusy, setMenuBusy] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
@@ -28,6 +30,87 @@ export default function ContactDetail() {
     fetchContact();
     if (isAdmin) fetchTeam();
   }, [id]);
+
+  function buildShareText() {
+    const lines = [
+      contact.name,
+      contact.designation,
+      contact.company,
+      contact.phone ? `Phone: ${contact.phone}` : '',
+      contact.email ? `Email: ${contact.email}` : '',
+      contact.website ? `Website: ${contact.website}` : '',
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
+
+  async function handleShare() {
+    setMenuOpen(false);
+    const text = buildShareText();
+
+    // Native share sheet (WhatsApp, SMS, Email, any installed app) where supported
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: contact.name, text });
+        return;
+      } catch (err) {
+        // User cancelled the native sheet — fall through to nothing further
+        return;
+      }
+    }
+
+    // Fallback: show our own action sheet with direct platform links
+    setShareSheetOpen(true);
+  }
+
+  function shareToWhatsApp() {
+    const text = encodeURIComponent(buildShareText());
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+    setShareSheetOpen(false);
+  }
+
+  function shareViaEmail() {
+    const subject = encodeURIComponent(contact.name || 'Contact');
+    const body = encodeURIComponent(buildShareText());
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    setShareSheetOpen(false);
+  }
+
+  function shareViaSMS() {
+    const body = encodeURIComponent(buildShareText());
+    window.location.href = `sms:?body=${body}`;
+    setShareSheetOpen(false);
+  }
+
+  async function copyDetails() {
+    try {
+      await navigator.clipboard.writeText(buildShareText());
+    } catch (err) {
+      console.error('Could not copy', err);
+    }
+    setShareSheetOpen(false);
+  }
+
+  async function handleExportSingle() {
+    setMenuBusy(true);
+    try {
+      const res = await api.get('/contacts/export', {
+        params: { contactId: id, format: 'xlsx' },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${contact.name || 'contact'}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Could not export contact', err);
+    } finally {
+      setMenuBusy(false);
+      setMenuOpen(false);
+    }
+  }
 
   async function fetchContact() {
     setLoading(true);
@@ -191,7 +274,7 @@ export default function ContactDetail() {
       {/* Header */}
       <div className='flex items-center justify-between mb-5'>
         <button
-          onClick={() => navigate('/contacts')}
+          onClick={() => navigate(-1)}
           className='w-9 h-9 flex items-center justify-center -ml-1'
         >
           <img
@@ -229,13 +312,20 @@ export default function ContactDetail() {
               <img src='/assets/icons/edit.svg' alt='' className='w-4 h-4' />{' '}
               Edit Contact
             </button>
-            <button className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800'>
+            <button
+              onClick={handleShare}
+              className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800'
+            >
               <img src='/assets/icons/share.svg' alt='' className='w-4 h-4' />{' '}
               Share
             </button>
-            <button className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800'>
+            <button
+              onClick={handleExportSingle}
+              disabled={menuBusy}
+              className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800 disabled:opacity-50'
+            >
               <img src='/assets/icons/export.svg' alt='' className='w-4 h-4' />{' '}
-              Export
+              {menuBusy ? 'Exporting...' : 'Export'}
             </button>
             <button
               onClick={handleDelete}
@@ -244,6 +334,76 @@ export default function ContactDetail() {
               <img src='/assets/icons/trash.svg' alt='' className='w-4 h-4' />{' '}
               Delete
             </button>
+          </div>
+        </>
+      )}
+
+      {shareSheetOpen && (
+        <>
+          <div
+            className='fixed inset-0 bg-black/40 z-40'
+            onClick={() => setShareSheetOpen(false)}
+          />
+          <div className='fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white rounded-t-3xl z-50 p-5 pb-8'>
+            <div className='w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5' />
+            <p className='text-[15px] font-bold text-gray-900 mb-4'>
+              Share Contact
+            </p>
+
+            <div className='flex flex-col gap-1'>
+              <button
+                onClick={shareToWhatsApp}
+                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
+              >
+                <img
+                  src='/assets/icons/share-whatsapp.svg'
+                  alt=''
+                  className='w-6 h-6'
+                />
+                <span className='text-[14px] font-medium text-gray-800'>
+                  WhatsApp
+                </span>
+              </button>
+              <button
+                onClick={shareViaEmail}
+                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
+              >
+                <img
+                  src='/assets/icons/share-email.svg'
+                  alt=''
+                  className='w-6 h-6'
+                />
+                <span className='text-[14px] font-medium text-gray-800'>
+                  Email
+                </span>
+              </button>
+              <button
+                onClick={shareViaSMS}
+                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
+              >
+                <img
+                  src='/assets/icons/share-sms.svg'
+                  alt=''
+                  className='w-6 h-6'
+                />
+                <span className='text-[14px] font-medium text-gray-800'>
+                  SMS
+                </span>
+              </button>
+              <button
+                onClick={copyDetails}
+                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
+              >
+                <img
+                  src='/assets/icons/share-copy.svg'
+                  alt=''
+                  className='w-6 h-6'
+                />
+                <span className='text-[14px] font-medium text-gray-800'>
+                  Copy Details
+                </span>
+              </button>
+            </div>
           </div>
         </>
       )}

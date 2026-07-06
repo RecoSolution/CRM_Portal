@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '2.1.3';
 
 export default function AboutApp() {
   const navigate = useNavigate();

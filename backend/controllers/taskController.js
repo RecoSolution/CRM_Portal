@@ -5,6 +5,35 @@ import User from '../models/User.js';
 import notify from '../utils/notify.js';
 import Contact from '../models/Contact.js';
 
+// ── Derive the real-time status from dueDate, ignoring any stale
+// stored value. Completed is the only status that stays authoritative
+// (it's a deliberate user action, not date-derived). Pending means
+// "no due date set yet."
+function computeStatus(task) {
+  if (task.status === 'Completed') return 'Completed';
+  if (!task.dueDate) return 'Pending';
+
+  const due = new Date(task.dueDate);
+  const now = new Date();
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (dueDay.getTime() === today.getTime()) return 'Today';
+  if (dueDay.getTime() < today.getTime()) return 'Overdue';
+  return 'Upcoming';
+}
+
+// Apply computeStatus to a Mongoose doc (or array of docs) before sending
+// to the client, without mutating the actual stored document.
+function withComputedStatus(taskOrTasks) {
+  const apply = (t) => {
+    const obj = t.toObject ? t.toObject() : t;
+    obj.status = computeStatus(obj);
+    return obj;
+  };
+  return Array.isArray(taskOrTasks) ? taskOrTasks.map(apply) : apply(taskOrTasks);
+}
+
 const POPULATE_FIELDS = [
   { path: 'assignedEmployee', select: 'firstName lastName email' },
   { path: 'createdBy', select: 'firstName lastName email' },
@@ -27,22 +56,39 @@ const getTasks = asyncHandler(async (req, res) => {
     filter, // quick shortcut: 'overdue' | 'today' | 'upcoming' | 'completed' | 'pending'
     dueFrom, // date-range start (ISO string)
     dueTo, // date-range end (ISO string)
+    createdBy, // Founder "My Tasks": everything I created (reminders + assigned)
+    teamView, // Founder "Team Tasks": exclude my own tasks, show the team's
     page = 1,
     limit = 20,
   } = req.query;
 
   let query = applyRoleScope(req, {}, 'assignedEmployee');
 
+  if (createdBy) {
+    query.createdBy = createdBy;
+  } else if (teamView === 'true' && req.user.role === 'founder') {
+    query.assignedEmployee = { $ne: req.user.id };
+  }
+
   // Quick-filter shortcut maps directly onto the status enum
-  const FILTER_STATUS_MAP = {
-    overdue: 'Overdue',
-    today: 'Today',
-    upcoming: 'Upcoming',
-    completed: 'Completed',
-    pending: 'Pending',
-  };
-  if (filter && FILTER_STATUS_MAP[filter]) {
-    query.status = FILTER_STATUS_MAP[filter];
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  if (filter === 'completed') {
+    query.status = 'Completed';
+  } else if (filter === 'pending') {
+    query.status = { $ne: 'Completed' };
+    query.dueDate = null;
+  } else if (filter === 'today') {
+    query.status = { $ne: 'Completed' };
+    query.dueDate = { $gte: todayStart, $lt: todayEnd };
+  } else if (filter === 'overdue') {
+    query.status = { $ne: 'Completed' };
+    query.dueDate = { $lt: todayStart };
+  } else if (filter === 'upcoming') {
+    query.status = { $ne: 'Completed' };
+    query.dueDate = { $gte: todayEnd };
   } else if (status) {
     query.status = status;
   }
@@ -59,7 +105,8 @@ const getTasks = asyncHandler(async (req, res) => {
     }).select('_id');
     query.contact = { $in: matchingContacts.map((c) => c._id) };
   }
-  // Founder can further filter by a specific employee
+  // Founder can further filter by a specific employee (overrides the
+  // teamView exclusion above if both happen to be sent)
   if (assignedEmployee && req.user.role === 'founder') {
     query.assignedEmployee = assignedEmployee;
   }
@@ -85,7 +132,7 @@ const getTasks = asyncHandler(async (req, res) => {
     total,
     page: Number(page),
     pages: Math.ceil(total / limit),
-    tasks,
+    tasks: withComputedStatus(tasks),
   });
 });
 
@@ -103,7 +150,7 @@ const getTask = asyncHandler(async (req, res) => {
     return res.status(403).json({ success: false, message: 'Access denied.' });
   }
 
-  res.json({ success: true, task });
+  res.json({ success: true, task: withComputedStatus(task) });
 });
 
 // ────────────────────────────────────────────────────────
@@ -285,7 +332,7 @@ const rescheduleTask = asyncHandler(async (req, res) => {
   if (dueDate) task.dueDate = dueDate;
   if (dueTime) task.dueTime = dueTime;
   task.rescheduledAt = new Date();
-  task.status = 'Upcoming';
+  // status is no longer hardcoded here — it's derived from dueDate on every read
 
   let detail = `Rescheduled to ${dueDate || task.dueDate}${dueTime ? ' ' + dueTime : ''}.`;
   if (reason) detail += ` Reason: ${reason}`;
@@ -298,7 +345,7 @@ const rescheduleTask = asyncHandler(async (req, res) => {
 
   await task.save();
   const populated = await task.populate(POPULATE_FIELDS);
-  res.json({ success: true, task: populated });
+  res.json({ success: true, task: withComputedStatus(populated) });
 });
 
 // ────────────────────────────────────────────────────────

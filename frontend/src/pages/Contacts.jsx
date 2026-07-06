@@ -12,7 +12,7 @@ export default function Contacts() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const location = useLocation();
-  const [advancedFilters, setAdvancedFilters] = useState({});
+  const [advancedFilters, setAdvancedFilters] = useState(() => location.state?.filters || {});
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -21,12 +21,6 @@ export default function Contacts() {
 
     return () => clearTimeout(timer); // cancels the pending update if user types again before 400ms
   }, [search]);
-
-  useEffect(() => {
-    if (location.state?.filters) {
-      setAdvancedFilters(location.state.filters);
-    }
-  }, [location.state]);
 
   useEffect(() => {
     fetchContacts();

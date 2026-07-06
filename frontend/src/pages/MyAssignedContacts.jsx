@@ -104,10 +104,10 @@ export default function MyAssignedContacts() {
         ) : (
           <div className='flex flex-col gap-3'>
             {contacts.map((c) => (
-              <button
+              <div
                 key={c._id}
                 onClick={() => navigate(`/contacts/${c._id}`)}
-                className='w-full bg-white rounded-2xl p-4 flex items-center gap-3 text-left'
+                className='w-full bg-white rounded-2xl p-4 flex items-center gap-3 text-left cursor-pointer'
               >
                 <div className='w-11 h-11 rounded-full bg-sage/60 flex items-center justify-center text-white font-bold text-[13px] shrink-0'>
                   {getInitials(c.name)}
@@ -115,10 +115,13 @@ export default function MyAssignedContacts() {
                 <div className='flex-1 min-w-0'>
                   <div className='flex items-center justify-between mb-1'>
                     <p className='text-[14px] font-bold text-gray-900 truncate'>{c.name}</p>
-                    {c.taskStatusLabel && (
-                      <span className='text-[11px] font-semibold px-2.5 py-1 rounded-full bg-sage/70 text-white shrink-0 ml-2'>
+                    {c.taskStatusLabel && c.openTaskId && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${c.openTaskId}`); }}
+                        className='text-[11px] font-semibold px-2.5 py-1 rounded-full bg-sage/70 text-white shrink-0 ml-2'
+                      >
                         {c.taskStatusLabel}
-                      </span>
+                      </button>
                     )}
                   </div>
                   <p className='text-[12px] text-gray-500 truncate'>{c.company}</p>
@@ -126,7 +129,7 @@ export default function MyAssignedContacts() {
                     <p className='text-[11px] text-gray-400 capitalize mt-0.5'>{c.relationshipType}</p>
                   )}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
