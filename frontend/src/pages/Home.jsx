@@ -451,7 +451,7 @@ export default function Home() {
 
           <div className='absolute left-0 top-0 h-full w-[78%] max-w-[300px] bg-white shadow-xl flex flex-col overflow-y-auto'>
             {/* Centered profile header — new layout */}
-            <div className='pt-8 pb-5 px-5 flex flex-col items-center text-center border-b border-gray-100'>
+            <div className='pt-8 pb-5 px-5 flex flex-col items-center text-center border-b border-gray-300'>
               <div className='w-20 h-20 rounded-full bg-sage/60 flex items-center justify-center overflow-hidden shrink-0 mb-3'>
                 {user?.avatar ? (
                   <img
@@ -515,15 +515,12 @@ export default function Home() {
               </button>
 
               {/* Placeholder items — not wired yet, per your instruction */}
-              <button className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left opacity-40 cursor-default'>
-                <img
-                  src='/assets/icons/settings.svg'
-                  alt=''
-                  className='w-5 h-5'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Settings
-                </span>
+              <button
+                onClick={() => { setMenuOpen(false); navigate('/analytics'); }}
+                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
+              >
+                <img src='/assets/icons/analytics.svg' alt='' className='w-5 h-5 opacity-70' />
+                <span className='text-[14px] font-medium text-gray-800'>Analytics</span>
               </button>
               <button
                 onClick={() => {

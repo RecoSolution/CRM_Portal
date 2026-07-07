@@ -40,6 +40,7 @@ import FAQ from './pages/FAQ';
 import ContactSupport from './pages/ContactSupport';
 import ReportIssue from './pages/ReportIssue';
 import AboutApp from './pages/AboutApp';
+import Analytics from './pages/Analytics';
 
 function Gate({ children }) {
   const { user, loading } = useAuth();
@@ -342,6 +343,14 @@ export default function App() {
             element={
               <Gate>
                 <AboutApp />
+              </Gate>
+            }
+          />
+          <Route
+            path='/analytics'
+            element={
+              <Gate>
+                <Analytics />
               </Gate>
             }
           />

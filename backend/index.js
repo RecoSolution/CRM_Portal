@@ -13,6 +13,7 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 import folderRoutes from './routes/folderRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 // ── Connect to MongoDB ───────────────────────────────────
 connectDB();
@@ -72,6 +73,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // ── 404 Handler ──────────────────────────────────────────
 app.use((req, res) => {

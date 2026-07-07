@@ -132,11 +132,19 @@ export default function TaskDetail() {
     return (
       <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
         <div className='flex items-center gap-1.5'>
-          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
+          <span
+            className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
+            style={{ animationDelay: '0ms' }}
+          />
+          <span
+            className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
+            style={{ animationDelay: '150ms' }}
+          />
+          <span
+            className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
+            style={{ animationDelay: '300ms' }}
+          />
         </div>
-        
       </div>
     );
   }

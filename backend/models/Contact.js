@@ -120,6 +120,17 @@ const contactSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    // ── Analytics support ──────────────────────
+    contactSource: {
+      type: String,
+      enum: ['scan', 'manual', 'import'],
+      default: 'scan',
+    },
+    dealStatus: {
+      type: String,
+      enum: ['active', 'won', 'lost'],
+      default: 'active',
+    },
   },
   { timestamps: true },
 );
