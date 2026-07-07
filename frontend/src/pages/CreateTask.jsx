@@ -4,6 +4,24 @@ import api from '../utils/api';
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
 
+const PRIORITY_DOT = {
+  High: 'bg-red-500',
+  Medium: 'bg-amber-500',
+  Low: 'bg-sage',
+};
+
+function FormField({ label, children }) {
+  return (
+    <div>
+      <label className="block text-[12.5px] font-semibold text-gray-500 mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inputClass =
+  'w-full h-12 rounded-xl px-4 text-[14.5px] text-gray-900 bg-white border border-sage/20 outline-none focus:border-forest/40 transition-colors';
+
 export default function CreateTask() {
   const navigate = useNavigate();
 
@@ -34,9 +52,7 @@ export default function CreateTask() {
         api.get('/admin/team'),
         api.get('/contacts', { params: { limit: 100 } }),
       ]);
-      setEmployees(
-        (teamRes.data.team || []).filter((u) => u.role === 'employee'),
-      );
+      setEmployees((teamRes.data.team || []).filter((u) => u.role === 'employee'));
       setContacts(contactsRes.data.contacts || []);
     } catch (err) {
       setError('Could not load employees/contacts.');
@@ -75,10 +91,7 @@ export default function CreateTask() {
       });
       navigate('/tasks');
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Could not create task. Please try again.',
-      );
+      setError(err.response?.data?.message || 'Could not create task. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -86,152 +99,128 @@ export default function CreateTask() {
 
   if (loading) {
     return (
-      <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
-        <div className='flex items-center gap-1.5'>
-          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
+      <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-forest animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2.5 h-2.5 rounded-full bg-sage animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
-      <div className='bg-sage flex items-center justify-between px-5 h-14 shrink-0'>
-        <button
-          onClick={() => navigate('/tasks')}
-          className='w-9 h-9 flex items-center justify-center -ml-1'
-        >
-          <img
-            src='/assets/icons/arrow-left.svg'
-            alt='back'
-            className='w-5 h-5'
-          />
+    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
+      <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0 shadow-sm sticky top-0 z-10">
+        <button onClick={() => navigate('/tasks')} className="w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors">
+          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
         </button>
-        <span className='text-white font-semibold text-[16px]'>New Task</span>
-        <div className='w-9 h-9' />
+        <span className="text-white font-semibold text-[16px]">New Task</span>
+        <div className="w-9 h-9" />
       </div>
 
-      <div className='flex-1 px-5 pt-6 pb-10'>
+      <div className="flex-1 px-5 pt-6 pb-10">
         {error && (
-          <div className='bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4'>
+          <div className="bg-red-50 ring-1 ring-red-100 text-red-600 text-[13px] rounded-2xl px-4 py-3 mb-5">
             {error}
           </div>
         )}
 
-        <div className='flex flex-col gap-4 mb-5'>
-          <div>
-            <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-              Title
-            </label>
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5">
+          Task Details
+        </p>
+        <div className="flex flex-col gap-3.5 mb-8">
+          <FormField label="Title">
             <input
               value={form.title}
               onChange={(e) => handleChange('title', e.target.value)}
-              className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
+              className={inputClass}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-              Description
-            </label>
+          <FormField label="Description">
             <textarea
               value={form.description}
               onChange={(e) => handleChange('description', e.target.value)}
               rows={3}
-              className='w-full rounded-xl px-4 py-3 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none resize-none'
+              className="w-full rounded-xl px-4 py-3 text-[14.5px] text-gray-900 bg-white border border-sage/20 outline-none focus:border-forest/40 transition-colors resize-none"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-              Assign To
-            </label>
+          <FormField label="Assign To">
             <select
               value={form.assignedEmployee}
               onChange={(e) => handleChange('assignedEmployee', e.target.value)}
-              className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
+              className={inputClass}
             >
-              <option value=''>Select employee</option>
+              <option value="">Select employee</option>
               {employees.map((emp) => (
                 <option key={emp._id} value={emp._id}>
                   {emp.firstName} {emp.lastName}
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-              Related Contact (optional)
-            </label>
+          <FormField label="Related Contact (optional)">
             <select
               value={form.contact}
               onChange={(e) => handleChange('contact', e.target.value)}
-              className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
+              className={inputClass}
             >
-              <option value=''>None</option>
+              <option value="">None</option>
               {contacts.map((c) => (
                 <option key={c._id} value={c._id}>
                   {c.name}
-                  {c.company ? ` — ${c.company}` : ''}
+                  {c.company ? ` - ${c.company}` : ''}
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div className='flex gap-3'>
-            <div className='flex-1'>
-              <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-                Due Date
-              </label>
+          <div className="flex gap-3">
+            <FormField label="Due Date">
               <input
-                type='date'
+                type="date"
                 value={form.dueDate}
                 onChange={(e) => handleChange('dueDate', e.target.value)}
-                className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
+                className={inputClass}
               />
-            </div>
-            <div className='flex-1'>
-              <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-                Due Time
-              </label>
+            </FormField>
+            <FormField label="Due Time">
               <input
-                type='time'
+                type="time"
                 value={form.dueTime}
                 onChange={(e) => handleChange('dueTime', e.target.value)}
-                className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
+                className={inputClass}
               />
-            </div>
+            </FormField>
           </div>
 
-          <div>
-            <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>
-              Notes
-            </label>
+          <FormField label="Notes">
             <textarea
               value={form.notes}
               onChange={(e) => handleChange('notes', e.target.value)}
               rows={2}
-              className='w-full rounded-xl px-4 py-3 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none resize-none'
+              className="w-full rounded-xl px-4 py-3 text-[14.5px] text-gray-900 bg-white border border-sage/20 outline-none focus:border-forest/40 transition-colors resize-none"
             />
-          </div>
+          </FormField>
         </div>
 
-        <div className='mb-8'>
-          <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Priority</p>
-          <div className='flex gap-2 flex-wrap'>
+        <div className="mb-8">
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5">
+            Priority
+          </p>
+          <div className="flex gap-2">
             {PRIORITIES.map((p) => (
               <button
                 key={p}
                 onClick={() => handleChange('priority', p)}
-                className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                  form.priority === p
-                    ? 'bg-sage text-white'
-                    : 'bg-white/70 text-gray-500'
+                className={`flex-1 h-10 rounded-full text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors ${
+                  form.priority === p ? 'bg-forest text-white' : 'bg-white text-gray-500 ring-1 ring-black/[0.03]'
                 }`}
               >
+                <span className={`w-2 h-2 rounded-full ${form.priority === p ? 'bg-white' : PRIORITY_DOT[p]}`} />
                 {p}
               </button>
             ))}
@@ -241,7 +230,7 @@ export default function CreateTask() {
         <button
           onClick={handleCreate}
           disabled={saving}
-          className='w-full h-12 rounded-full font-semibold text-[15px] bg-forest text-white disabled:opacity-60'
+          className="w-full h-12 rounded-full font-semibold text-[14.5px] bg-forest text-white disabled:opacity-60 active:scale-[0.98] transition-transform shadow-[0_4px_14px_-4px_rgba(64,101,80,0.5)]"
         >
           {saving ? 'Creating...' : 'Create Task'}
         </button>

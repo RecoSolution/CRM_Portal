@@ -1,8 +1,93 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useEffect } from 'react';
 import api from '../utils/api';
+
+const CARD_SHADOW = 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03]';
+
+const TASK_STATS = [
+  { key: 'overdue', label: 'Overdue', icon: '/assets/icons/overdue.svg', bg: 'bg-red-50' },
+  { key: 'today', label: 'Due today', icon: '/assets/icons/due-today.svg', bg: 'bg-forest/10' },
+  { key: 'upcoming', label: 'Upcoming', icon: '/assets/icons/upcoming.svg', bg: 'bg-sage/15' },
+];
+
+function getInitials(name) {
+  if (!name) return '?';
+  return name.split(' ').filter(Boolean).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function SectionLabel({ children, action }) {
+  return (
+    <div className="flex items-center justify-between mb-3 px-1">
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{children}</p>
+      {action}
+    </div>
+  );
+}
+
+function StatBlock({ stat, value }) {
+  return (
+    <div className="flex-1 flex flex-col items-center gap-2">
+      <div className={`w-10 h-10 rounded-full ${stat.bg} flex items-center justify-center`}>
+        <img src={stat.icon} alt="" className="w-4.5 h-4.5" />
+      </div>
+      <span className="font-bold text-[19px] text-gray-900 leading-none">{value}</span>
+      <span className="text-[11.5px] text-gray-500">{stat.label}</span>
+    </div>
+  );
+}
+
+function ContactCard({ contact, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full bg-white rounded-2xl px-4 py-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform ${CARD_SHADOW}`}
+    >
+      <div className="w-11 h-11 rounded-full bg-forest/10 ring-1 ring-forest/20 flex items-center justify-center text-forest font-bold text-[13px] shrink-0">
+        {getInitials(contact.name)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-semibold text-gray-900 truncate">
+          {contact.name}{' '}
+          <span className="font-normal text-gray-500">{contact.company}</span>
+        </p>
+        <span className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full bg-forest/10 text-forest text-[10.5px] font-semibold">
+          Lead
+        </span>
+      </div>
+      <img src="/assets/icons/chevron-right.svg" alt="" className="w-4 h-4 opacity-40 shrink-0" />
+    </button>
+  );
+}
+
+function DrawerItem({ icon, label, onClick }) {
+  return (
+    <button onClick={onClick} className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl text-left active:bg-sage/5 transition-colors">
+      <div className="w-9 h-9 rounded-full bg-sage/10 flex items-center justify-center shrink-0">
+        <img src={icon} alt="" className="w-4.5 h-4.5 opacity-70" />
+      </div>
+      <span className="text-[14px] font-medium text-gray-800">{label}</span>
+    </button>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-[168px] rounded-2xl bg-white shadow-[0_2px_10px_rgba(0,0,0,0.06)] animate-pulse" />
+      <div className="h-[68px] rounded-2xl bg-white/70 animate-pulse" />
+      <div className="h-[76px] rounded-2xl bg-white/70 animate-pulse" />
+      <div className="h-[76px] rounded-2xl bg-white/70 animate-pulse" />
+    </div>
+  );
+}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -14,8 +99,8 @@ export default function Home() {
   const [homeScope, setHomeScope] = useState('team');
   const [teamAssignments, setTeamAssignments] = useState([]);
 
-  const hasContacts =
-    dashboard?.recentContacts?.length > 0 || dashboard?.assignedCount > 0;
+  const isFounder = user?.role === 'founder';
+  const hasContacts = dashboard?.recentContacts?.length > 0 || dashboard?.assignedCount > 0;
 
   function handleScanTap() {
     setFabState('pressed');
@@ -23,325 +108,217 @@ export default function Home() {
     setTimeout(() => navigate('/scan'), 900);
   }
 
+  // Dashboard data depends on the active scope toggle (founder only).
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      setLoading(true);
+      try {
+        const params = isFounder && homeScope === 'mine' ? { scope: 'mine' } : {};
+        const { data } = await api.get('/dashboard/home', { params });
+        if (!cancelled) setDashboard(data);
+      } catch (err) {
+        console.error('Could not load dashboard', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     loadDashboard();
-    if (user?.role === 'founder') loadTeamAssignments();
-  }, [homeScope]);
+    return () => { cancelled = true; };
+  }, [homeScope, isFounder]);
 
-  async function loadDashboard() {
-    try {
-      const params =
-        user?.role === 'founder' && homeScope === 'mine'
-          ? { scope: 'mine' }
-          : {};
-      const { data } = await api.get('/dashboard/home', { params });
+  // Team assignments only need to load once per session for founders, not on every scope toggle.
+  useEffect(() => {
+    if (!isFounder) return;
+    let cancelled = false;
 
-      setDashboard(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+    async function loadTeamAssignments() {
+      try {
+        const { data } = await api.get('/admin/team');
+        if (!cancelled) setTeamAssignments((data.team || []).filter((u) => u.role === 'employee'));
+      } catch (err) {
+        console.error('Could not load team assignments', err);
+      }
     }
-  }
 
-  async function loadTeamAssignments() {
-    try {
-      const { data } = await api.get('/admin/team');
-      setTeamAssignments(
-        (data.team || []).filter((u) => u.role === 'employee'),
-      );
-    } catch (err) {
-      console.error('Could not load team assignments', err);
-    }
-  }
+    loadTeamAssignments();
+    return () => { cancelled = true; };
+  }, [isFounder]);
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
-      {/* Top header */}
-      <div className='bg-sage flex items-center justify-between px-5 h-14 shrink-0'>
-        <button onClick={() => setMenuOpen(true)}>
-          <img src='/assets/icons/menu.svg' alt='menu' className='w-6 h-6' />
-        </button>
-        <span className='text-white font-semibold text-[16px]'>
-          RecoSolution
-        </span>
-        <button onClick={() => navigate('/notifications')}>
-          <img
-            src='/assets/icons/bell.svg'
-            alt='notifications'
-            className='w-6 h-6'
-          />
-        </button>
+    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
+
+      {/* Header */}
+      <div className="bg-gradient-to-br from-sage to-forest px-5 pt-5 pb-8 shrink-0 rounded-b-[28px] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.15)]">
+        <div className="flex items-center justify-between mb-5">
+          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors">
+            <img src="/assets/icons/menu.svg" alt="menu" className="w-6 h-6 brightness-0 invert" />
+          </button>
+          <span className="text-white font-semibold text-[15px] tracking-wide">RecoSolution</span>
+          <button onClick={() => navigate('/notifications')} className="w-9 h-9 flex items-center justify-center rounded-full active:bg-white/10 transition-colors">
+            <img src="/assets/icons/bell.svg" alt="notifications" className="w-6 h-6 brightness-0 invert" />
+          </button>
+        </div>
+        <p className="text-white text-[20px] font-bold leading-tight">
+          {getGreeting()}{user?.firstName ? `, ${user.firstName}` : ''}
+        </p>
+        <p className="text-white/70 text-[12.5px] mt-1">
+          Here's what's happening with your contacts today
+        </p>
       </div>
 
       {/* Main content */}
-      <div className='flex-1 flex flex-col items-center justify-center px-6 pb-24'>
+      <div className="flex-1 flex flex-col px-5 pb-28 -mt-4">
         {loading ? (
-          <div className='flex items-center gap-1.5'>
-            <span
-              className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
-              style={{ animationDelay: '0ms' }}
-            />
-            <span
-              className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
-              style={{ animationDelay: '150ms' }}
-            />
-            <span
-              className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
-              style={{ animationDelay: '300ms' }}
-            />
-          </div>
+          <HomeSkeleton />
         ) : !hasContacts ? (
-          <>
-            <h1 className='text-[19px] font-bold text-forest mb-8 text-center'>
-              No Contacts Yet
-            </h1>
-            <img
-              src='/assets/illustrations/no-contacts.png'
-              alt='No contacts'
-              className='w-[210px] h-[210px] object-contain mb-10'
-            />
-            <p className='text-center text-[14px] font-medium text-gray-800 mb-2'>
-              Scan your first
-              <br />
-              business card
+          <div className="flex-1 flex flex-col items-center justify-center text-center pt-16">
+            <div className="w-40 h-40 rounded-full bg-white flex items-center justify-center mb-6 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.1)] ring-1 ring-black/[0.03]">
+              <img src="/assets/illustrations/no-contacts.png" alt="No contacts" className="w-24 h-24 object-contain" />
+            </div>
+            <h1 className="text-[18px] font-bold text-gray-900 mb-2">No contacts yet</h1>
+            <p className="text-[13px] text-gray-500 leading-relaxed mb-6 px-6">
+              Scan your first business card to start building your contact list
             </p>
-            <img
-              src='/assets/icons/arrow-down.svg'
-              alt=''
-              className='w-5 h-5'
-            />
-          </>
+            <button
+              onClick={handleScanTap}
+              className="h-12 px-6 rounded-full font-semibold text-[14px] bg-forest text-white flex items-center gap-2 active:scale-[0.98] transition-transform shadow-[0_4px_14px_-4px_rgba(64,101,80,0.5)]"
+            >
+              <img src="/assets/icons/camera.svg" alt="" className="w-4 h-4 brightness-0 invert" />
+              Scan a card
+            </button>
+          </div>
         ) : (
-          <div className='w-full text-left'>
+          <div className="w-full text-left flex flex-col gap-5 pt-1">
+
             {/* My Tasks / Team View toggle — Founder only */}
-            {user?.role === 'founder' && (
-              <div className='flex gap-2 mb-5 pt-4'>
-                <button
-                  onClick={() => setHomeScope('mine')}
-                  className={`h-10 px-5 rounded-full text-[14px] font-bold ${
-                    homeScope === 'mine'
-                      ? 'bg-forest text-white'
-                      : 'bg-white text-gray-900 border-[1.5px] border-forest'
-                  }`}
-                >
-                  My Tasks
-                </button>
-                <button
-                  onClick={() => setHomeScope('team')}
-                  className={`h-10 px-5 rounded-full text-[14px] font-bold ${
-                    homeScope === 'team'
-                      ? 'bg-forest text-white'
-                      : 'bg-white text-gray-900 border-[1.5px] border-forest'
-                  }`}
-                >
-                  Team View
-                </button>
+            {isFounder && (
+              <div className="flex gap-2 bg-white rounded-full p-1 ring-1 ring-black/[0.03]">
+                {[
+                  { key: 'mine', label: 'My Tasks' },
+                  { key: 'team', label: 'Team View' },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setHomeScope(opt.key)}
+                    className={`flex-1 h-9 rounded-full text-[13px] font-semibold transition-colors ${
+                      homeScope === opt.key ? 'bg-forest text-white shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
             )}
 
             {/* Task summary card */}
-            <div className='border-2 border-forest/40 rounded-2xl p-4 mb-4'>
-              <p className='text-center text-forest font-bold text-[15px] mb-3'>
-                {user?.role === 'founder' && homeScope === 'team'
-                  ? 'Team Summary'
-                  : 'My Tasks Overview'}
+            <div className={`bg-white rounded-2xl p-5 ${CARD_SHADOW}`}>
+              <p className="text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                {isFounder && homeScope === 'team' ? 'Team summary' : 'My tasks overview'}
               </p>
-              <div className='flex items-center justify-around mb-3'>
-                <div className='flex flex-col items-center gap-1'>
-                  {/* icon reference — replace with your own asset */}
-                  <img
-                    src='/assets/icons/overdue.svg'
-                    alt=''
-                    className='w-6 h-6'
-                  />
-                  <span className='font-bold text-[18px] text-gray-900'>
-                    {dashboard?.tasks?.overdue ?? 0}
-                  </span>
-                  <span className='text-[12px] text-gray-500'>Overdue</span>
-                </div>
-                <div className='flex flex-col items-center gap-1'>
-                  <img
-                    src='/assets/icons/due-today.svg'
-                    alt=''
-                    className='w-6 h-6'
-                  />
-                  <span className='font-bold text-[18px] text-gray-900'>
-                    {dashboard?.tasks?.today ?? 0}
-                  </span>
-                  <span className='text-[12px] text-gray-500'>Due Today</span>
-                </div>
-                <div className='flex flex-col items-center gap-1'>
-                  <img
-                    src='/assets/icons/upcoming.svg'
-                    alt=''
-                    className='w-6 h-6'
-                  />
-                  <span className='font-bold text-[18px] text-gray-900'>
-                    {dashboard?.tasks?.upcoming ?? 0}
-                  </span>
-                  <span className='text-[12px] text-gray-500'>Upcoming</span>
-                </div>
+              <div className="flex items-start mb-5">
+                {TASK_STATS.map((stat, i) => (
+                  <div key={stat.key} className={i === 1 ? 'flex-1 border-x border-gray-100 px-2' : 'flex-1 px-2'}>
+                    <StatBlock stat={stat} value={dashboard?.tasks?.[stat.key] ?? 0} />
+                  </div>
+                ))}
               </div>
               <button
                 onClick={() => navigate('/tasks')}
-                className='w-full h-9 rounded-full bg-sage/70 text-white text-[13px] font-semibold flex items-center justify-center gap-1'
+                className="w-full h-11 rounded-full bg-forest/10 text-forest text-[13px] font-semibold flex items-center justify-center gap-1.5 active:bg-forest/15 transition-colors"
               >
-                View All Tasks
-                <img
-                  src='/assets/icons/chevron-right.svg'
-                  alt=''
-                  className='w-3.5 h-3.5'
-                />
+                View all tasks
+                <img src="/assets/icons/chevron-right.svg" alt="" className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Unassigned Contacts — Founder + Team View only */}
-            {user?.role === 'founder' && homeScope === 'team' && (
+            {isFounder && homeScope === 'team' && (
               <button
                 onClick={() => navigate('/admin/unassigned-contacts')}
-                className='w-full bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm mb-4'
+                className={`w-full bg-white rounded-2xl p-4 flex items-center gap-3 ${CARD_SHADOW}`}
               >
-                <img
-                  src='/assets/icons/unassigned-user.svg'
-                  alt=''
-                  className='w-11 h-11 shrink-0'
-                />
-                <div className='flex-1 text-left'>
-                  <p className='text-[14px] font-semibold text-gray-900'>
-                    Unassigned Contacts
-                  </p>
-                  <p className='text-[12px] text-gray-500'>
-                    {dashboard?.unassignedContactsCount ?? 0} Contacts Awaiting
-                    Assignment
+                <div className="w-11 h-11 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                  <img src="/assets/icons/unassigned-user.svg" alt="" className="w-5 h-5" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-[14px] font-semibold text-gray-900">Unassigned contacts</p>
+                  <p className="text-[12px] text-gray-500 mt-0.5">
+                    {dashboard?.unassignedContactsCount ?? 0} awaiting assignment
                   </p>
                 </div>
-                <img
-                  src='/assets/icons/chevron-right.svg'
-                  alt=''
-                  className='w-4 h-4'
-                />
+                <img src="/assets/icons/chevron-right.svg" alt="" className="w-4 h-4 opacity-40" />
               </button>
             )}
 
             {/* Recently added contacts */}
             {dashboard?.recentContacts?.length > 0 && (
-              <>
-                <div className='flex items-center justify-between mb-3'>
-                  <p className='text-[14px] font-bold text-gray-900'>
-                    Recently Added Contacts
-                  </p>
-                  <button
-                    onClick={() => navigate('/contacts/recent')}
-                    className='text-[13px] text-gray-500 font-medium flex items-center gap-1'
-                  >
-                    View All
-                    <img
-                      src='/assets/icons/chevron-right.svg'
-                      alt=''
-                      className='w-3.5 h-3.5'
-                    />
-                  </button>
-                </div>
-                <div className='flex flex-col gap-2 mb-4'>
-                  {dashboard.recentContacts.map((c) => (
+              <div>
+                <SectionLabel
+                  action={
                     <button
-                      key={c._id}
-                      onClick={() => navigate(`/contacts/${c._id}`)}
-                      className='bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm text-left'
+                      onClick={() => navigate('/contacts/recent')}
+                      className="text-[12.5px] text-gray-500 font-medium flex items-center gap-1"
                     >
-                      <div className='w-11 h-11 rounded-full bg-sage/40 flex items-center justify-center font-bold text-gray-700 text-[13px] shrink-0'>
-                        {c.name
-                          ?.split(' ')
-                          .map((p) => p[0])
-                          .join('')
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </div>
-                      <div className='flex-1 min-w-0'>
-                        <p className='text-[14px] font-semibold text-gray-900 truncate'>
-                          {c.name}{' '}
-                          <span className='font-normal text-gray-500'>
-                            {c.company}
-                          </span>
-                        </p>
-                        <span className='inline-block mt-1 px-2.5 py-0.5 rounded-full border border-forest/30 text-forest text-[11px] font-medium'>
-                          Lead
-                        </span>
-                      </div>
-                      <img
-                        src='/assets/icons/chevron-right.svg'
-                        alt=''
-                        className='w-4 h-4 shrink-0'
-                      />
+                      View all
+                      <img src="/assets/icons/chevron-right.svg" alt="" className="w-3.5 h-3.5 opacity-50" />
                     </button>
+                  }
+                >
+                  Recently added
+                </SectionLabel>
+                <div className="flex flex-col gap-2.5">
+                  {dashboard.recentContacts.map((c) => (
+                    <ContactCard key={c._id} contact={c} onClick={() => navigate(`/contacts/${c._id}`)} />
                   ))}
                 </div>
-              </>
+              </div>
             )}
 
             {/* Team Assignments — Founder + Team View only */}
-            {user?.role === 'founder' &&
-              homeScope === 'team' &&
-              teamAssignments.length > 0 && (
-                <button
-                  onClick={() => navigate('/team-dashboard')}
-                  className='w-full bg-white rounded-2xl p-4 mb-4 text-left'
-                >
-                  <p className='text-[14px] font-bold text-gray-900 mb-3'>
-                    Team Assignments
-                  </p>
-                  <div className='flex flex-col gap-2.5'>
-                    {teamAssignments.map((emp) => (
-                      <div key={emp._id} className='flex items-center gap-3'>
-                        <div className='w-8 h-8 rounded-full bg-sage/60 flex items-center justify-center text-white font-bold text-[11px] shrink-0'>
-                          {(emp.firstName?.[0] || '').toUpperCase()}
-                          {(emp.lastName?.[0] || '').toUpperCase()}
-                        </div>
-                        <span className='flex-1 text-[13px] font-medium text-gray-800'>
-                          {emp.firstName} {emp.lastName}
-                        </span>
-                        <span className='text-[13px] font-bold text-gray-900'>
-                          {emp.contactCount ?? 0}{' '}
-                          <span className='font-normal text-gray-500'>
-                            Contacts
-                          </span>
-                        </span>
+            {isFounder && homeScope === 'team' && teamAssignments.length > 0 && (
+              <button
+                onClick={() => navigate('/team-dashboard')}
+                className={`w-full bg-white rounded-2xl p-4 text-left ${CARD_SHADOW}`}
+              >
+                <SectionLabel>Team assignments</SectionLabel>
+                <div className="flex flex-col divide-y divide-gray-100">
+                  {teamAssignments.map((emp) => (
+                    <div key={emp._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div className="w-8 h-8 rounded-full bg-forest/10 ring-1 ring-forest/20 flex items-center justify-center text-forest font-bold text-[11px] shrink-0">
+                        {getInitials(`${emp.firstName || ''} ${emp.lastName || ''}`)}
                       </div>
-                    ))}
-                  </div>
-                </button>
-              )}
+                      <span className="flex-1 text-[13px] font-medium text-gray-800 truncate">
+                        {emp.firstName} {emp.lastName}
+                      </span>
+                      <span className="text-[13px] font-bold text-gray-900 shrink-0">
+                        {emp.contactCount ?? 0}
+                        <span className="font-normal text-gray-500 text-[12px]"> contacts</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </button>
+            )}
 
             {/* My Assigned Contacts — Employee only */}
             {user?.role === 'employee' && (
               <button
                 onClick={() => navigate('/contacts/my-assigned')}
-                className='w-full bg-forest rounded-2xl p-4 flex items-center gap-3 mb-4'
+                className="w-full bg-forest rounded-2xl p-4 flex items-center gap-3 active:scale-[0.99] transition-transform shadow-[0_4px_14px_-4px_rgba(64,101,80,0.4)]"
               >
-                <div className='w-11 h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0'>
-                  <img
-                    src='/assets/icons/team-members.svg'
-                    alt=''
-                    className='w-5 h-5'
-                  />
+                <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                  <img src="/assets/icons/team-members.svg" alt="" className="w-5 h-5" />
                 </div>
-                <div className='flex-1 text-left'>
-                  <p className='text-[14px] font-semibold text-white'>
-                    My Assigned Contacts
-                  </p>
-                  <p className='text-[13px] text-white/80'>
-                    <span className='font-bold'>
-                      {dashboard?.assignedContactsCount ?? 0}
-                    </span>{' '}
-                    Active Contacts
+                <div className="flex-1 text-left">
+                  <p className="text-[14px] font-semibold text-white">My assigned contacts</p>
+                  <p className="text-[12.5px] text-white/70 mt-0.5">
+                    <span className="font-bold text-white">{dashboard?.assignedContactsCount ?? 0}</span> active contacts
                   </p>
                 </div>
-                <img
-                  src='/assets/icons/chevron-right.svg'
-                  alt=''
-                  className='w-4 h-4 brightness-0 invert'
-                />
+                <img src="/assets/icons/chevron-right.svg" alt="" className="w-4 h-4 brightness-0 invert opacity-80" />
               </button>
             )}
           </div>
@@ -349,252 +326,137 @@ export default function Home() {
       </div>
 
       {/* Bottom tab bar */}
-      <div className='bg-forest relative px-2 pt-3 pb-2 shrink-0'>
-        <div className='flex items-center justify-between px-2'>
-          <button
-            onClick={() => navigate('/home')}
-            className='flex flex-col items-center gap-1 flex-1'
-          >
-            <img src='/assets/icons/tab-home.svg' alt='' className='w-6 h-6' />
-            <span className='text-white text-[11px] font-medium'>Home</span>
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-forest relative px-2 pt-3 pb-2 shrink-0">
+        <div className="flex items-center justify-between px-2">
+          <button onClick={() => navigate('/home')} className="flex flex-col items-center gap-1 flex-1 py-1">
+            <img src="/assets/icons/tab-home.svg" alt="" className="w-6 h-6" />
+            <span className="text-white text-[11px] font-medium">Home</span>
           </button>
 
-          <button
-            onClick={() => navigate('/contacts')}
-            className='flex flex-col items-center gap-1 flex-1'
-          >
-            <img
-              src='/assets/icons/tab-contacts.svg'
-              alt=''
-              className='w-6 h-6'
-            />
-            <span className='text-white/80 text-[11px] font-medium'>
-              Contacts
-            </span>
+          <button onClick={() => navigate('/contacts')} className="flex flex-col items-center gap-1 flex-1 py-1">
+            <img src="/assets/icons/tab-contacts.svg" alt="" className="w-6 h-6 opacity-80" />
+            <span className="text-white/80 text-[11px] font-medium">Contacts</span>
           </button>
 
           {/* Spacer for the floating scan button */}
-          <div className='flex-1' />
+          <div className="flex-1" />
 
-          <button
-            onClick={() => navigate('/tasks')}
-            className='flex flex-col items-center gap-1 flex-1'
-          >
-            <img
-              src='/assets/icons/tab-followup.svg'
-              alt=''
-              className='w-6 h-6'
-            />
-            <span className='text-white/80 text-[11px] font-medium'>Tasks</span>
+          <button onClick={() => navigate('/tasks')} className="flex flex-col items-center gap-1 flex-1 py-1">
+            <img src="/assets/icons/tab-followup.svg" alt="" className="w-6 h-6 opacity-80" />
+            <span className="text-white/80 text-[11px] font-medium">Tasks</span>
           </button>
 
-          <button
-            onClick={() => navigate('/profile')}
-            className='flex flex-col items-center gap-1 flex-1'
-          >
-            <img
-              src='/assets/icons/tab-profile.svg'
-              alt=''
-              className='w-6 h-6'
-            />
-            <span className='text-white/80 text-[11px] font-medium'>
-              Profile
-            </span>
+          <button onClick={() => navigate('/profile')} className="flex flex-col items-center gap-1 flex-1 py-1">
+            <img src="/assets/icons/tab-profile.svg" alt="" className="w-6 h-6 opacity-80" />
+            <span className="text-white/80 text-[11px] font-medium">Profile</span>
           </button>
         </div>
 
         {/* Floating Scan button */}
-        {/* Floating Scan button */}
         <button
           onClick={handleScanTap}
-          className='absolute left-1/2 -translate-x-1/2 -top-8 w-16 h-16 rounded-full bg-sage flex items-center justify-center shadow-lg'
+          className="absolute left-1/2 -translate-x-1/2 -top-8 w-16 h-16 rounded-full bg-sage flex items-center justify-center shadow-[0_8px_20px_-4px_rgba(0,0,0,0.3)]"
         >
           <div
-            className={`w-14 h-14 rounded-full bg-forest flex items-center justify-center ${fabState !== 'idle' ? 'scale-95' : ''} transition-transform`}
+            className={`w-14 h-14 rounded-full bg-forest flex items-center justify-center transition-transform ${
+              fabState !== 'idle' ? 'scale-95' : ''
+            }`}
           >
             {fabState === 'loading' ? (
-              <div className='flex items-center gap-1.5'>
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
-                  style={{ animationDelay: '0ms' }}
-                />
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
-                  style={{ animationDelay: '150ms' }}
-                />
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
-                  style={{ animationDelay: '300ms' }}
-                />
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-white/70 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             ) : (
-              <img
-                src='/assets/icons/camera.svg'
-                alt='Scan'
-                className='w-6 h-6 brightness-0 invert'
-              />
+              <img src="/assets/icons/camera.svg" alt="Scan" className="w-6 h-6 brightness-0 invert" />
             )}
           </div>
         </button>
-        <span className='absolute left-1/2 -translate-x-1/2 top-9 text-white text-[11px] font-semibold'>
+        <span className="absolute left-1/2 -translate-x-1/2 top-9 text-white text-[11px] font-semibold whitespace-nowrap">
           {fabState === 'loading' ? 'Just a sec...' : 'Scan'}
         </span>
       </div>
 
       {/* Side menu drawer */}
       {menuOpen && (
-        <div className='fixed inset-0 z-50'>
-          <div
-            className='absolute inset-0 bg-black/40'
-            onClick={() => setMenuOpen(false)}
-          />
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
 
-          <div className='absolute left-0 top-0 h-full w-[78%] max-w-[300px] bg-white shadow-xl flex flex-col overflow-y-auto'>
-            {/* Centered profile header — new layout */}
-            <div className='pt-8 pb-5 px-5 flex flex-col items-center text-center border-b border-gray-300'>
-              <div className='w-20 h-20 rounded-full bg-sage/60 flex items-center justify-center overflow-hidden shrink-0 mb-3'>
+          <div className="absolute left-0 top-0 h-full w-[78%] max-w-[300px] bg-white shadow-[0_0_32px_-4px_rgba(0,0,0,0.25)] flex flex-col overflow-y-auto animate-[slide-in-left_0.2s_ease-out]">
+            {/* Profile header */}
+            <div className="pt-9 pb-6 px-5 flex flex-col items-center text-center border-b border-sage/10">
+              <div className="w-20 h-20 rounded-full bg-forest/10 ring-2 ring-forest/20 flex items-center justify-center overflow-hidden shrink-0 mb-3">
                 {user?.avatar ? (
-                  <img
-                    src={user.avatar}
-                    alt='Profile'
-                    className='w-full h-full object-cover'
-                  />
+                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
-                  <span className='text-white font-bold text-[24px]'>
-                    {(user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')}
+                  <span className="text-forest font-bold text-[22px]">
+                    {getInitials(`${user?.firstName || ''} ${user?.lastName || ''}`)}
                   </span>
                 )}
               </div>
-              <p className='font-bold text-gray-900 text-[16px]'>
+              <p className="font-bold text-gray-900 text-[16px]">
                 {user?.firstName} {user?.lastName}
               </p>
-              <p className='text-[13px] text-gray-500'>
-                {user?.jobTitle ||
-                  (user?.role === 'founder' ? 'Founder' : 'Employee')}
+              <p className="text-[12.5px] text-gray-500 mt-0.5">
+                {user?.jobTitle || (isFounder ? 'Founder' : 'Employee')}
               </p>
             </div>
 
-            {/* Sidebar features — Home/Profile/Contacts/Tasks/Notifications removed */}
-            {/* since they're already reachable from the bottom nav / Home page.  */}
-            <div className='px-3 py-3 flex-1'>
-              {user?.role === 'founder' && (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate('/team-dashboard');
-                  }}
-                  className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
-                >
-                  <img
-                    src='/assets/icons/team-dashboard.svg'
-                    alt=''
-                    className='w-5 h-5 opacity-70'
-                  />
-                  <span className='text-[14px] font-medium text-gray-800'>
-                    Team Dashboard
-                  </span>
-                </button>
+            <div className="px-3 py-3 flex-1">
+              {isFounder && (
+                <DrawerItem
+                  icon="/assets/icons/team-dashboard.svg"
+                  label="Team Dashboard"
+                  onClick={() => { setMenuOpen(false); navigate('/team-dashboard'); }}
+                />
               )}
-
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate('/contacts/export');
-                }}
-                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
-              >
-                {/* icon reference — replace with your own asset */}
-                <img
-                  src='/assets/icons/export.svg'
-                  alt=''
-                  className='w-5 h-5 opacity-70'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Export Contacts
-                </span>
-              </button>
-
-              {/* Placeholder items — not wired yet, per your instruction */}
-              <button
+              <DrawerItem
+                icon="/assets/icons/export.svg"
+                label="Export Contacts"
+                onClick={() => { setMenuOpen(false); navigate('/contacts/export'); }}
+              />
+              <DrawerItem
+                icon="/assets/icons/analytics.svg"
+                label="Analytics"
                 onClick={() => { setMenuOpen(false); navigate('/analytics'); }}
-                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
-              >
-                <img src='/assets/icons/analytics.svg' alt='' className='w-5 h-5 opacity-70' />
-                <span className='text-[14px] font-medium text-gray-800'>Analytics</span>
-              </button>
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate('/help-support');
-                }}
-                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
-              >
-                <img
-                  src='/assets/icons/help.svg'
-                  alt=''
-                  className='w-5 h-5 opacity-70'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Help & Support
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate('/privacy-policy');
-                }}
-                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
-              >
-                <img
-                  src='/assets/icons/privacy.svg'
-                  alt=''
-                  className='w-5 h-5 opacity-70'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Privacy Policy
-                </span>
-              </button>
-              <button
+              />
+              <DrawerItem
+                icon="/assets/icons/help.svg"
+                label="Help and Support"
+                onClick={() => { setMenuOpen(false); navigate('/help-support'); }}
+              />
+              <DrawerItem
+                icon="/assets/icons/privacy.svg"
+                label="Privacy Policy"
+                onClick={() => { setMenuOpen(false); navigate('/privacy-policy'); }}
+              />
+              <DrawerItem
+                icon="/assets/icons/info.svg"
+                label="About App"
                 onClick={() => { setMenuOpen(false); navigate('/about-app'); }}
-                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
-              >
-                <img src='/assets/icons/info.svg' alt='' className='w-5 h-5 opacity-70' />
-                <span className='text-[14px] font-medium text-gray-800'>About App</span>
-              </button>
+              />
             </div>
 
-            {/* Logout — reuses existing logout() from AuthContext */}
-            <div className='px-3 py-3 border-t border-gray-100'>
+            <div className="px-3 py-3 border-t border-sage/10">
               <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  logout();
-                  navigate('/login');
-                }}
-                className='w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl text-left'
+                onClick={() => { setMenuOpen(false); logout(); navigate('/login'); }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl text-left active:bg-red-50 transition-colors"
               >
-                <img
-                  src='/assets/icons/logout.svg'
-                  alt=''
-                  className='w-5 h-5 opacity-70'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Logout
-                </span>
+                <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                  <img src="/assets/icons/logout.svg" alt="" className="w-4.5 h-4.5 opacity-70" />
+                </div>
+                <span className="text-[14px] font-medium text-red-600">Logout</span>
               </button>
             </div>
           </div>
 
-          {/* Slide-in animation */}
           <style>{`
-      @keyframes slide-in-left {
-        from { transform: translateX(-100%); }
-        to { transform: translateX(0); }
-      }
-      .absolute.left-0.top-0.h-full {
-        animation: slide-in-left 0.2s ease-out;
-      }
-    `}</style>
+            @keyframes slide-in-left {
+              from { transform: translateX(-100%); }
+              to { transform: translateX(0); }
+            }
+          `}</style>
         </div>
       )}
     </div>

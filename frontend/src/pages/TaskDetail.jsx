@@ -6,6 +6,19 @@ import api from '../utils/api';
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const STATUSES = ['Pending', 'Today', 'Upcoming', 'Overdue', 'Completed'];
 
+function getInitials(name) {
+  if (!name) return '?';
+  const cleaned = name.replace(/[^a-zA-Z\s]/g, '').trim();
+  if (!cleaned) return '?';
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 export default function TaskDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -130,165 +143,143 @@ export default function TaskDetail() {
 
   if (loading || !task) {
     return (
-      <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
-        <div className='flex items-center gap-1.5'>
-          <span
-            className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
-            style={{ animationDelay: '0ms' }}
-          />
-          <span
-            className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
-            style={{ animationDelay: '150ms' }}
-          />
-          <span
-            className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
-            style={{ animationDelay: '300ms' }}
-          />
+      <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
+        <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0">
+          <button onClick={() => navigate('/tasks')} className="w-9 h-9 flex items-center justify-center -ml-1">
+            <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
+          </button>
+          <span className="text-white font-semibold text-[16px]">Task Details</span>
+          <div className="w-9 h-9" />
+        </div>
+        <div className="flex-1 px-5 pt-7">
+          <div className="flex flex-col gap-3">
+            <div className="h-[60px] rounded-2xl bg-white/70 animate-pulse" />
+            <div className="h-[76px] rounded-2xl bg-white/70 animate-pulse" />
+            <div className="h-[80px] rounded-2xl bg-white/70 animate-pulse" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
-      <div className='bg-sage flex items-center justify-between px-5 h-14 shrink-0'>
-        <button
-          onClick={() => navigate('/tasks')}
-          className='w-9 h-9 flex items-center justify-center -ml-1'
-        >
-          <img
-            src='/assets/icons/arrow-left.svg'
-            alt='back'
-            className='w-5 h-5'
-          />
+    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
+      <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0">
+        <button onClick={() => navigate('/tasks')} className="w-9 h-9 flex items-center justify-center -ml-1">
+          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
         </button>
-        <span className='text-white font-semibold text-[16px]'>
-          Task Details
-        </span>
-        <div className='w-9 h-9' />
+        <span className="text-white font-semibold text-[16px]">Task Details</span>
+        <div className="w-9 h-9" />
       </div>
 
-      <div className='flex-1 px-5 pt-6 pb-10 overflow-y-auto'>
+      <div className="flex-1 px-5 pt-6 pb-10 overflow-y-auto">
         {error && (
-          <div className='bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4'>
+          <div className="bg-red-50 border border-red-200 text-red-600 text-[13px] rounded-2xl px-4 py-3 mb-5">
             {error}
           </div>
         )}
 
-        {/* Title + priority card */}
-        <div className='bg-white rounded-2xl p-4 flex items-center justify-between mb-4'>
-          <div className='flex items-center gap-3 min-w-0'>
-            <img
-              src='/assets/icons/task-clipboard.svg'
-              alt=''
-              className='w-5 h-5 shrink-0'
-            />
-            <h1 className='text-[15px] font-bold text-gray-900 truncate'>
-              {task.title}
-            </h1>
+        <div className="bg-white rounded-2xl p-4 mb-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-full bg-sage/15 flex items-center justify-center shrink-0">
+              <img src="/assets/icons/task-clipboard.svg" alt="" className="w-4 h-4" />
+            </div>
+            <h1 className="text-[15.5px] font-bold text-gray-900 leading-snug pt-1.5">{task.title}</h1>
           </div>
-          <span className='text-[12px] font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0 ml-2'>
-            {task.priority} Priority
-          </span>
+          <div className="flex items-center gap-2 pl-[46px]">
+            <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+              {task.priority} Priority
+            </span>
+            {task.status && (
+              <span className={`text-[11.5px] font-semibold px-2.5 py-1 rounded-full ${statusColor(task.status)}`}>
+                {task.status}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Contact card */}
         {task.contact && (
-          <div className='bg-white rounded-2xl p-4 flex items-center gap-3 mb-4'>
-            <div className='w-11 h-11 rounded-full bg-sage/60 flex items-center justify-center text-white font-bold text-[13px] shrink-0'>
-              {task.contact.name
-                ?.split(' ')
-                .map((p) => p[0])
-                .join('')
-                .slice(0, 2)
-                .toUpperCase()}
+          <div className="bg-white rounded-2xl p-4 flex items-center gap-3 mb-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+            <div className="w-11 h-11 rounded-full bg-sage flex items-center justify-center text-white font-bold text-[13px] shrink-0">
+              {getInitials(task.contact.name)}
             </div>
-            <div className='flex-1 min-w-0'>
-              <p className='text-[14px] font-bold text-gray-900 truncate'>
-                {task.contact.name}
-              </p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-bold text-gray-900 truncate">{task.contact.name}</p>
               {task.contact.company && (
-                <p className='text-[12px] font-semibold text-gray-700 truncate'>
-                  {task.contact.company}
-                </p>
+                <p className="text-[12px] font-semibold text-gray-500 truncate">{task.contact.company}</p>
               )}
             </div>
             <button
               onClick={() => navigate(`/contacts/${task.contact._id}`)}
-              className='h-9 px-4 rounded-full border-[1.5px] border-forest text-forest text-[12px] font-semibold shrink-0'
+              className="h-9 px-4 rounded-full border-[1.5px] border-forest text-forest text-[12px] font-semibold shrink-0 active:scale-[0.97] transition-transform"
             >
               View Contact
             </button>
           </div>
         )}
 
-        {/* Task schedule */}
-        <p className='text-[14px] font-bold text-gray-900 mb-2'>
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
           Task Schedule
         </p>
-        <div className='bg-white rounded-2xl mb-4 flex divide-x divide-gray-200'>
-          <div className='flex-1 p-4'>
-            <p className='text-[12px] text-gray-500 mb-1'>Date</p>
-            <p className='text-[14px] font-bold text-gray-900'>
-              {formatDate(task.dueDate)}
-            </p>
+        <div className="bg-white rounded-2xl mb-4 flex divide-x divide-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+          <div className="flex-1 p-4">
+            <p className="text-[12px] text-gray-500 mb-1">Date</p>
+            <p className="text-[14px] font-bold text-gray-900">{formatDate(task.dueDate)}</p>
           </div>
-          <div className='flex-1 p-4'>
-            <p className='text-[12px] text-gray-500 mb-1'>Time</p>
-            <p className='text-[14px] font-bold text-gray-900'>
-              {task.dueTime || '—'}
-            </p>
+          <div className="flex-1 p-4">
+            <p className="text-[12px] text-gray-500 mb-1">Time</p>
+            <p className="text-[14px] font-bold text-gray-900">{task.dueTime || '—'}</p>
           </div>
         </div>
 
-        {/* Assigned/created-by meta */}
-        <div className='flex flex-col gap-1 mb-5 text-[12px] text-gray-500'>
-          {task.assignedEmployee && (
-            <span>
-              Assigned to: {task.assignedEmployee.firstName}{' '}
-              {task.assignedEmployee.lastName}
-            </span>
-          )}
-          {task.createdBy && (
-            <span>
-              Created by: {task.createdBy.firstName} {task.createdBy.lastName}
-            </span>
-          )}
-        </div>
+        {(task.assignedEmployee || task.createdBy) && (
+          <div className="flex flex-col gap-1 mb-6 px-1 text-[12px] text-gray-500">
+            {task.assignedEmployee && (
+              <span>
+                Assigned to: <span className="text-gray-700 font-medium">{task.assignedEmployee.firstName} {task.assignedEmployee.lastName}</span>
+              </span>
+            )}
+            {task.createdBy && (
+              <span>
+                Created by: <span className="text-gray-700 font-medium">{task.createdBy.firstName} {task.createdBy.lastName}</span>
+              </span>
+            )}
+          </div>
+        )}
 
-        {/* Note */}
-        <p className='text-[14px] font-bold text-gray-900 mb-2'>Note</p>
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
+          Note
+        </p>
         {task.notes && (
-          <p className='text-[13px] text-gray-700 bg-white rounded-2xl px-4 py-3 mb-2 whitespace-pre-line'>
+          <p className="text-[13.5px] text-gray-700 bg-white rounded-2xl px-4 py-3.5 mb-3 whitespace-pre-line shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             {task.notes}
           </p>
         )}
-        <div className='flex gap-2 mb-6'>
+        <div className="flex gap-2 mb-7">
           <input
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
-            placeholder='Add a note...'
-            className='flex-1 h-11 rounded-xl px-3 text-[14px] text-gray-900 bg-white border border-forest/30 outline-none'
+            placeholder="Add a note..."
+            className="flex-1 h-11 rounded-2xl px-3.5 text-[14px] text-gray-900 bg-white border-none outline-none shadow-[0_1px_3px_rgba(0,0,0,0.06)] placeholder:text-gray-400"
           />
           <button
             onClick={addNote}
             disabled={busy || !noteText.trim()}
-            className='h-11 px-4 rounded-xl bg-forest text-white text-[13px] font-semibold disabled:opacity-60'
+            className="h-11 px-4 rounded-2xl bg-forest text-white text-[13px] font-semibold disabled:opacity-60 active:scale-[0.97] transition-transform shrink-0"
           >
             Add
           </button>
         </div>
 
-        {/* Actions */}
-        <p className='text-[14px] font-bold text-gray-900 text-center mb-3'>
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
           Actions
         </p>
-        <div className='flex gap-2 mb-6'>
+        <div className="flex gap-2 mb-6">
           {task.status !== 'Completed' && (
             <button
               onClick={() => updateStatus('Completed')}
               disabled={busy}
-              className='flex-1 h-10 rounded-full bg-forest text-white text-[12px] font-semibold disabled:opacity-60'
+              className="flex-1 h-10 rounded-full bg-forest text-white text-[12px] font-semibold disabled:opacity-60 active:scale-[0.97] transition-transform"
             >
               Mark as Completed
             </button>
@@ -296,7 +287,7 @@ export default function TaskDetail() {
           {isFounder && (
             <button
               onClick={() => navigate(`/tasks/${id}/edit`)}
-              className='flex-1 h-10 rounded-full bg-sage/70 text-white text-[12px] font-semibold'
+              className="flex-1 h-10 rounded-full bg-sage text-white text-[12px] font-semibold active:scale-[0.97] transition-transform"
             >
               Edit Task
             </button>
@@ -304,58 +295,48 @@ export default function TaskDetail() {
           {task.status !== 'Completed' && (
             <button
               onClick={() => navigate(`/tasks/${id}/reschedule`)}
-              className='flex-1 h-10 rounded-full bg-sage/70 text-white text-[12px] font-semibold'
+              className="flex-1 h-10 rounded-full bg-sage text-white text-[12px] font-semibold active:scale-[0.97] transition-transform"
             >
               Reschedule
             </button>
           )}
         </div>
 
-        {/* Activity history accordion */}
-        <div className='bg-white rounded-2xl mb-5 overflow-hidden'>
+        <div className="bg-white rounded-2xl mb-6 overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
           <button
-            onClick={() =>
-              showHistory ? setShowHistory(false) : loadHistory()
-            }
-            className='w-full flex items-center justify-between px-4 py-3.5'
+            onClick={() => (showHistory ? setShowHistory(false) : loadHistory())}
+            className="w-full flex items-center justify-between px-4 py-3.5"
           >
-            <span className='text-[14px] font-semibold text-gray-500'>
-              Activity History
-            </span>
+            <span className="text-[13.5px] font-semibold text-gray-700">Activity History</span>
             <img
-              src='/assets/icons/chevron-down.svg'
-              alt=''
-              className={`w-4 h-4 transition-transform ${showHistory ? 'rotate-180' : ''}`}
+              src="/assets/icons/chevron-down.svg"
+              alt=""
+              className={`w-4 h-4 transition-transform opacity-60 ${showHistory ? 'rotate-180' : ''}`}
             />
           </button>
           {showHistory && (
-            <div className='divide-y divide-gray-100 border-t border-gray-100'>
-              {history.map((h, i) => (
-                <div
-                  key={i}
-                  className='px-4 py-3 flex items-center justify-between gap-3'
-                >
-                  <span className='text-[12px] text-gray-500 shrink-0'>
-                    {formatDate(h.timestamp)}
-                  </span>
-                  <span className='text-[13px] text-gray-800 text-right'>
-                    {h.detail}{' '}
-                    <span className='text-gray-400'>
-                      (By {h.performedBy?.firstName})
+            <div className="divide-y divide-gray-100 border-t border-gray-100">
+              {history.length === 0 ? (
+                <p className="px-4 py-3.5 text-[12.5px] text-gray-400">No activity yet</p>
+              ) : (
+                history.map((h, i) => (
+                  <div key={i} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <span className="text-[12px] text-gray-500 shrink-0">{formatDate(h.timestamp)}</span>
+                    <span className="text-[13px] text-gray-800 text-right">
+                      {h.detail} <span className="text-gray-400">(By {h.performedBy?.firstName})</span>
                     </span>
-                  </span>
-                </div>
-              ))}
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
 
-        {/* Founder: delete */}
         {isFounder && (
           <button
             onClick={deleteTask}
             disabled={busy}
-            className='w-full h-12 rounded-full font-semibold text-[15px] border-[1.5px] border-red-500 text-red-500 disabled:opacity-60'
+            className="w-full h-12 rounded-full font-semibold text-[15px] border-[1.5px] border-red-500 text-red-500 disabled:opacity-60 active:scale-[0.99] transition-transform"
           >
             Delete Task
           </button>

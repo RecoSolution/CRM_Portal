@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setDraft } from '../utils/scanDraftStore';
 
-const TASKS = [
-  'Call',
-  'Send Quotation',
-  'Schedule Meeting',
-  'Follow-up',
-  'Email',
-];
+const TASKS = ['Call', 'Send Quotation', 'Schedule Meeting', 'Follow-up', 'Email'];
+const PRIORITIES = ['Low', 'Medium', 'High'];
+const PRIORITY_DOT = {
+  Low: 'bg-gray-400',
+  Medium: 'bg-amber-500',
+  High: 'bg-red-500',
+};
 
 export default function SetReminder() {
   const navigate = useNavigate();
@@ -31,34 +31,36 @@ export default function SetReminder() {
   }
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg'>
-      {/* Header */}
-      <div className='bg-sage flex items-center justify-between px-4 h-14'>
+    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
+
+      <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0">
         <button
           onClick={() => navigate(-1)}
-          className='w-8 h-8 rounded-full bg-white/30 flex items-center justify-center'
+          className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"
         >
-          <img src='/assets/icons/close.svg' alt='close' className='w-4 h-4' />
+          <img src="/assets/icons/close.svg" alt="close" className="w-4 h-4 brightness-0 invert" />
         </button>
-        <span className='text-white font-bold text-[16px]'>Reminder</span>
+        <span className="text-white font-bold text-[16px]">Reminder</span>
         <button
           onClick={handleSet}
-          className='h-9 px-4 rounded-full bg-forest text-white text-[13px] font-semibold'
+          className="h-9 px-4 rounded-full bg-forest text-white text-[13px] font-semibold active:scale-[0.97] transition-transform"
         >
           Save
         </button>
       </div>
 
-      <div className='px-5 pt-6'>
-        {/* Task */}
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Task</p>
-        <div className='flex gap-2 flex-wrap mb-6'>
+      <div className="flex-1 px-5 pt-7 pb-10">
+
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
+          Task
+        </p>
+        <div className="flex gap-2 flex-wrap mb-7">
           {TASKS.map((t) => (
             <button
               key={t}
               onClick={() => setTask(t)}
-              className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                task === t ? 'bg-sage text-white' : 'bg-white/70 text-gray-500'
+              className={`h-9 px-4 rounded-full text-[13px] font-medium transition-colors ${
+                task === t ? 'bg-forest text-white' : 'bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)]'
               }`}
             >
               {t}
@@ -66,53 +68,49 @@ export default function SetReminder() {
           ))}
         </div>
 
-        {/* Due Date - native date input, browser provides the calendar UI */}
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Due Date</p>
-        <input
-          type='date'
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className='w-full h-11 rounded-full px-4 text-[14px] text-gray-700 bg-white/70 border-none outline-none mb-6'
-        />
-
-        {/* Time - native time input, browser provides the time picker UI */}
-        <p className='text-[14px] font-bold text-gray-900 mb-1'>
-          Time{' '}
-          <span className='text-gray-400 font-normal text-[12px]'>
-            (Optional)
-          </span>
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
+          Due Date
         </p>
         <input
-          type='time'
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className='h-11 px-4 rounded-full text-[14px] text-gray-700 bg-white/70 border-none outline-none mb-6'
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="w-full h-12 rounded-2xl px-4 text-[14px] text-gray-800 bg-white border-none outline-none mb-7 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
         />
 
-        {/* Priority */}
-        <p className='text-[14px] font-bold text-gray-900 mb-3'>Priority</p>
-        <div className='flex gap-6 mb-10'>
-          {['Low', 'Medium', 'High'].map((p) => (
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
+          Time <span className="normal-case font-normal text-gray-400">(optional)</span>
+        </p>
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="h-12 px-4 rounded-2xl text-[14px] text-gray-800 bg-white border-none outline-none mb-7 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+        />
+
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-3 px-1">
+          Priority
+        </p>
+        <div className="flex gap-3 mb-10">
+          {PRIORITIES.map((p) => (
             <button
               key={p}
               onClick={() => setPriority(p)}
-              className='flex items-center gap-2'
+              className={`flex-1 flex items-center justify-center gap-2 h-11 rounded-2xl transition-colors ${
+                priority === p ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]' : 'bg-transparent'
+              }`}
             >
-              <span
-                className={`w-4 h-4 rounded-full border-2 border-gray-400 flex items-center justify-center ${priority === p ? 'border-forest' : ''}`}
-              >
-                {priority === p && (
-                  <span className='w-2 h-2 rounded-full bg-forest' />
-                )}
+              <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[p]}`} />
+              <span className={`text-[13.5px] font-medium ${priority === p ? 'text-gray-900' : 'text-gray-500'}`}>
+                {p}
               </span>
-              <span className='text-[14px] text-gray-800'>{p}</span>
             </button>
           ))}
         </div>
 
         <button
           onClick={handleSet}
-          className='w-full h-12 rounded-full font-semibold text-[15px] bg-forest text-white'
+          className="w-full h-12 rounded-full font-semibold text-[15px] bg-forest text-white active:scale-[0.99] transition-transform"
         >
           Set
         </button>

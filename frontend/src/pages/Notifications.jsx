@@ -1,6 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+
+const PRIORITY_DOT = {
+  high: 'bg-red-500',
+  medium: 'bg-amber-500',
+};
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+}
+
+function ReminderCard({ reminder, onOpen }) {
+  return (
+    <button
+      onClick={() => onOpen(reminder.contactId)}
+      className="w-full flex items-start gap-3 bg-white rounded-2xl px-4 py-3.5 text-left shadow-[0_1px_3px_rgba(0,0,0,0.06)] active:scale-[0.99] transition-transform"
+    >
+      <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${PRIORITY_DOT[reminder.priority] || 'bg-gray-300'}`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="font-semibold text-[14.5px] text-gray-900 truncate">{reminder.contactName}</span>
+          <span className="text-[11.5px] text-gray-400 shrink-0">{formatDate(reminder.dueDate)}</span>
+        </div>
+        <p className="text-[13px] text-gray-500 capitalize truncate">
+          {reminder.task ? reminder.task.replace(/_/g, ' ') : reminder.note}
+        </p>
+      </div>
+    </button>
+  );
+}
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -8,84 +38,80 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchNotifications() {
+      setLoading(true);
+      try {
+        const [todayRes, upcomingRes] = await Promise.all([
+          api.get('/contacts/reminders/all', { params: { filter: 'today' } }),
+          api.get('/contacts/reminders/all', { params: { filter: 'upcoming' } }),
+        ]);
+        if (cancelled) return;
+        const combined = [
+          ...(todayRes.data.reminders || []).map((r) => ({ ...r, bucket: 'Today' })),
+          ...(upcomingRes.data.reminders || []).slice(0, 5).map((r) => ({ ...r, bucket: 'Upcoming' })),
+        ];
+        setReminders(combined);
+      } catch (err) {
+        console.error('Could not load notifications', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     fetchNotifications();
+    return () => { cancelled = true; };
   }, []);
 
-  async function fetchNotifications() {
-    setLoading(true);
-    try {
-      const [todayRes, upcomingRes] = await Promise.all([
-        api.get('/contacts/reminders/all', { params: { filter: 'today' } }),
-        api.get('/contacts/reminders/all', { params: { filter: 'upcoming' } }),
-      ]);
-      const combined = [
-        ...(todayRes.data.reminders || []).map((r) => ({ ...r, bucket: 'Today' })),
-        ...(upcomingRes.data.reminders || []).slice(0, 5).map((r) => ({ ...r, bucket: 'Upcoming' })),
-      ];
-      setReminders(combined);
-    } catch (err) {
-      console.error('Could not load notifications', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function formatDate(dateStr) {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
-  }
-
-  function priorityColor(priority) {
-    if (priority === 'high') return 'bg-red-500';
-    if (priority === 'medium') return 'bg-amber-500';
-    return 'bg-gray-400';
-  }
+  const sections = useMemo(() => {
+    const today = reminders.filter((r) => r.bucket === 'Today');
+    const upcoming = reminders.filter((r) => r.bucket === 'Upcoming');
+    return [
+      { label: 'Today', items: today },
+      { label: 'Upcoming', items: upcoming },
+    ].filter((s) => s.items.length > 0);
+  }, [reminders]);
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
+    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
 
-      <div className='bg-sage px-5 pt-5 pb-4 flex items-center justify-between'>
-        <button onClick={() => navigate(-1)} className='w-9 h-9 flex items-center justify-center -ml-1'>
-          <img src='/assets/icons/arrow-left.svg' alt='back' className='w-5 h-5' />
+      <div className="bg-sage px-5 pt-5 pb-4 flex items-center justify-between shrink-0">
+        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center -ml-1">
+          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
         </button>
-        <span className='text-white font-bold text-[17px]'>Notifications</span>
-        <div className='w-9 h-9' />
+        <span className="text-white font-bold text-[17px]">Notifications</span>
+        <div className="w-9 h-9" />
       </div>
 
-      <div className='flex-1 px-5 pt-5 pb-10 overflow-y-auto'>
+      <div className="flex-1 px-5 pt-5 pb-10 overflow-y-auto">
         {loading ? (
-          <div className='flex items-center justify-center py-20'>
-            <div className='flex items-center gap-1.5'>
-          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
-        </div>
+          <div className="flex flex-col gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-[68px] rounded-2xl bg-white/70 animate-pulse" />
+            ))}
           </div>
-        ) : reminders.length === 0 ? (
-          <div className='flex flex-col items-center justify-center py-20 text-center'>
-            <img src='/assets/icons/bell.svg' alt='' className='w-10 h-10 opacity-40 mb-3' />
-            <p className='text-[14px] text-gray-500'>You're all caught up — no pending reminders.</p>
+        ) : sections.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-sage/15 flex items-center justify-center">
+              <img src="/assets/icons/bell.svg" alt="" className="w-5 h-5 opacity-40" />
+            </div>
+            <p className="text-[14px] font-medium text-gray-600">You're all caught up</p>
+            <p className="text-[12.5px] text-gray-400 max-w-[220px]">No pending reminders right now.</p>
           </div>
         ) : (
-          <div className='flex flex-col gap-3'>
-            {reminders.map((r) => (
-              <button
-                key={r._id}
-                onClick={() => navigate(`/contacts/${r.contactId}`)}
-                className='flex items-start gap-3 bg-white/70 rounded-2xl px-4 py-3.5 text-left'
-              >
-                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${priorityColor(r.priority)}`} />
-                <div className='flex-1'>
-                  <div className='flex items-center justify-between mb-1'>
-                    <span className='font-semibold text-[14px] text-gray-900'>{r.contactName}</span>
-                    <span className='text-[11px] text-gray-400'>{r.bucket}</span>
-                  </div>
-                  <p className='text-[13px] text-gray-600 capitalize mb-1'>
-                    {r.task ? r.task.replace(/_/g, ' ') : r.note}
-                  </p>
-                  <span className='text-[12px] text-gray-400'>{formatDate(r.dueDate)}</span>
+          <div className="flex flex-col gap-6">
+            {sections.map((section) => (
+              <div key={section.label}>
+                <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
+                  {section.label}
+                </p>
+                <div className="flex flex-col gap-3">
+                  {section.items.map((r) => (
+                    <ReminderCard key={r._id} reminder={r} onOpen={(id) => navigate(`/contacts/${id}`)} />
+                  ))}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}

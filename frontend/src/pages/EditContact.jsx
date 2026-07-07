@@ -5,6 +5,50 @@ import api from '../utils/api';
 const RELATION_TYPES = ['Lead', 'Vendor', 'Customer', 'Partner'];
 const CONTACT_SOURCES = ['GREENS 2026', 'Factory Visit', 'GCPRS 2026', 'Other'];
 
+const FIELDS = [
+  { key: 'name', label: 'Name' },
+  { key: 'jobTitle', label: 'Job Title' },
+  { key: 'company', label: 'Company' },
+  { key: 'phone', label: 'Mobile No.' },
+  { key: 'email', label: 'Email' },
+  { key: 'website', label: 'Website' },
+  { key: 'address', label: 'Address' },
+];
+
+function FormField({ label, value, onChange }) {
+  return (
+    <div>
+      <label className='block text-[12.5px] font-semibold text-gray-500 mb-1.5'>{label}</label>
+      <input
+        value={value}
+        onChange={onChange}
+        className='w-full h-12 rounded-xl px-4 text-[14.5px] text-gray-900 bg-white border border-sage/20 outline-none focus:border-forest/40 transition-colors'
+      />
+    </div>
+  );
+}
+
+function ChipGroup({ title, options, selected, onSelect }) {
+  return (
+    <div className='mb-8'>
+      <p className='text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5'>{title}</p>
+      <div className='flex gap-2 flex-wrap'>
+        {options.map((option) => (
+          <button
+            key={option}
+            onClick={() => onSelect(option)}
+            className={`h-9 px-4 rounded-full text-[13px] font-medium transition-colors ${
+              selected === option ? 'bg-forest text-white' : 'bg-white text-gray-500 ring-1 ring-black/[0.03]'
+            }`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EditContact() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -66,7 +110,10 @@ export default function EditContact() {
         event: contactSource || undefined,
       });
 
-      navigate(`/contacts/${id}`);
+      // replace: true swaps this history entry instead of stacking a new
+      // one, so the back button on the detail page returns to the list,
+      // not back into this edit form.
+      navigate(`/contacts/${id}`, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Could not save changes. Please try again.');
     } finally {
@@ -87,128 +134,63 @@ export default function EditContact() {
   }
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg px-5 pt-5 pb-10'>
+    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
 
-      <div className='flex items-center justify-between mb-5'>
-        <button onClick={() => navigate(`/contacts/${id}`)} className='w-9 h-9 flex items-center justify-center -ml-1'>
+      <div className='bg-sage flex items-center justify-between px-5 h-14 shrink-0 shadow-sm sticky top-0 z-10'>
+        <button
+          onClick={() => navigate(-1)}
+          className='w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors'
+        >
           <img src='/assets/icons/arrow-left.svg' alt='back' className='w-5 h-5' />
         </button>
-        <span className='font-bold text-[17px] text-gray-900'>Edit Contact</span>
+        <span className='font-semibold text-[16px] text-white'>Edit Contact</span>
         <div className='w-9 h-9' />
       </div>
 
-      {error && (
-        <div className='bg-red-50 border border-red-200 text-red-600 text-sm rounded-2xl px-4 py-3 mb-4'>
-          {error}
-        </div>
-      )}
+      <div className='flex-1 px-5 pt-6 pb-10'>
 
-      <div className='flex flex-col gap-4 mb-5'>
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Name</label>
-          <input
-            value={form.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
+        {error && (
+          <div className='bg-red-50 ring-1 ring-red-100 text-red-600 text-[13px] rounded-2xl px-4 py-3 mb-5'>
+            {error}
+          </div>
+        )}
 
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Job Title</label>
-          <input
-            value={form.jobTitle}
-            onChange={(e) => handleChange('jobTitle', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Company</label>
-          <input
-            value={form.company}
-            onChange={(e) => handleChange('company', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Mobile No.</label>
-          <input
-            value={form.phone}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Email</label>
-          <input
-            value={form.email}
-            onChange={(e) => handleChange('email', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Website</label>
-          <input
-            value={form.website}
-            onChange={(e) => handleChange('website', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-
-        <div>
-          <label className='block text-[13px] font-semibold text-gray-600 mb-1.5'>Address</label>
-          <input
-            value={form.address}
-            onChange={(e) => handleChange('address', e.target.value)}
-            className='w-full h-12 rounded-xl px-4 text-[15px] text-gray-900 bg-white border border-forest/30 outline-none'
-          />
-        </div>
-      </div>
-
-      <div className='mb-5'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Relation Type</p>
-        <div className='flex gap-2 flex-wrap'>
-          {RELATION_TYPES.map((type) => (
-            <button
-              key={type}
-              onClick={() => setRelationType(type)}
-              className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                relationType === type ? 'bg-sage text-white' : 'bg-white/70 text-gray-500'
-              }`}
-            >
-              {type}
-            </button>
+        <p className='text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5'>
+          Contact Details
+        </p>
+        <div className='flex flex-col gap-3.5 mb-8'>
+          {FIELDS.map((field) => (
+            <FormField
+              key={field.key}
+              label={field.label}
+              value={form[field.key]}
+              onChange={(e) => handleChange(field.key, e.target.value)}
+            />
           ))}
         </div>
-      </div>
 
-      <div className='mb-8'>
-        <p className='text-[14px] font-bold text-gray-900 mb-2.5'>Contact Source</p>
-        <div className='flex gap-2 flex-wrap'>
-          {CONTACT_SOURCES.map((source) => (
-            <button
-              key={source}
-              onClick={() => setContactSource(source)}
-              className={`h-9 px-4 rounded-full text-[13px] font-medium ${
-                contactSource === source ? 'bg-sage text-white' : 'bg-white/70 text-gray-500'
-              }`}
-            >
-              {source}
-            </button>
-          ))}
-        </div>
-      </div>
+        <ChipGroup
+          title='Relation Type'
+          options={RELATION_TYPES}
+          selected={relationType}
+          onSelect={setRelationType}
+        />
 
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className='w-full h-12 rounded-full font-semibold text-[15px] bg-forest text-white disabled:opacity-60'
-      >
-        {saving ? 'Saving...' : 'Save Changes'}
-      </button>
+        <ChipGroup
+          title='Contact Source'
+          options={CONTACT_SOURCES}
+          selected={contactSource}
+          onSelect={setContactSource}
+        />
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className='w-full h-12 rounded-full font-semibold text-[14.5px] bg-forest text-white disabled:opacity-60 active:scale-[0.98] transition-transform'
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
     </div>
   );
 }

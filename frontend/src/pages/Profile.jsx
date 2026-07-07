@@ -21,8 +21,7 @@ export default function Profile() {
   return (
     <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
 
-      {/* Header */}
-      <div className="bg-sage px-5 pt-5 pb-4 flex items-center justify-between">
+      <div className="bg-sage px-5 pt-5 pb-4 flex items-center justify-between shrink-0">
         <button onClick={() => navigate('/home')} className="w-9 h-9 flex items-center justify-center -ml-1">
           <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
         </button>
@@ -31,9 +30,9 @@ export default function Profile() {
       </div>
 
       <div className="px-6 pt-8 pb-10 flex-1">
-        {/* Avatar + name */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-white/70 flex items-center justify-center mb-3">
+
+        <div className="flex flex-col items-center mb-9">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-sage/15 flex items-center justify-center mb-3 ring-4 ring-white">
             {user?.avatar ? (
               <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
             ) : (
@@ -41,44 +40,51 @@ export default function Profile() {
             )}
           </div>
           <p className="font-bold text-[17px] text-gray-900">{user?.firstName} {user?.lastName}</p>
-          <p className="text-[13px] text-gray-500">{user?.jobTitle}</p>
+          <p className="text-[13px] text-gray-500 mt-0.5">{user?.jobTitle}</p>
         </div>
 
-        {/* Info rows */}
-        <div className="flex flex-col gap-1 mb-8">
-          <div className="flex items-center gap-3 bg-white/60 rounded-2xl px-4 py-3.5">
-            <img src="/assets/icons/mail.svg" alt="" className="w-4.5 h-4.5" />
-            <span className="text-[14px] text-gray-800">{user?.email}</span>
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
+          Contact Info
+        </p>
+        <div className="flex flex-col gap-2.5 mb-8">
+          <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+            <div className="w-9 h-9 rounded-full bg-sage/15 flex items-center justify-center shrink-0">
+              <img src="/assets/icons/mail.svg" alt="" className="w-4 h-4" />
+            </div>
+            <span className="text-[14px] text-gray-800 truncate">{user?.email}</span>
           </div>
-          <div className="flex items-center gap-3 bg-white/60 rounded-2xl px-4 py-3.5">
-            <img src="/assets/icons/phone-outline.svg" alt="" className="w-4.5 h-4.5" />
+          <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+            <div className="w-9 h-9 rounded-full bg-sage/15 flex items-center justify-center shrink-0">
+              <img src="/assets/icons/phone-outline.svg" alt="" className="w-4 h-4" />
+            </div>
             <span className="text-[14px] text-gray-800">{user?.phone || 'Not set'}</span>
           </div>
         </div>
 
-        {/* Menu items */}
-        <div className="flex flex-col gap-1 mb-8">
+        <p className="text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">
+          Account
+        </p>
+        <div className="flex flex-col mb-8 bg-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
           <button
             onClick={() => navigate('/setup-profile')}
-            className="flex items-center gap-3 px-1 py-3 text-left"
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left border-b border-gray-100"
           >
-            <img src="/assets/icons/edit.svg" alt="" className="w-4.5 h-4.5" />
+            <img src="/assets/icons/edit.svg" alt="" className="w-4.5 h-4.5 opacity-70" />
             <span className="text-[14px] text-gray-800 font-medium">Edit Profile</span>
           </button>
           <button
             onClick={() => navigate('/profile-photo')}
-            className="flex items-center gap-3 px-1 py-3 text-left"
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
           >
-            <img src="/assets/icons/camera.svg" alt="" className="w-4.5 h-4.5" />
+            <img src="/assets/icons/camera.svg" alt="" className="w-4.5 h-4.5 opacity-70" />
             <span className="text-[14px] text-gray-800 font-medium">Change Photo</span>
           </button>
         </div>
 
-        {/* Logout */}
         {!confirmLogout ? (
           <button
             onClick={() => setConfirmLogout(true)}
-            className="w-full h-12 rounded-full border-[1.5px] border-red-400 text-red-500 font-semibold text-[14px]"
+            className="w-full h-12 rounded-full border-[1.5px] border-red-400 text-red-500 font-semibold text-[14px] active:scale-[0.99] transition-transform"
           >
             Logout
           </button>
@@ -86,13 +92,13 @@ export default function Profile() {
           <div className="flex gap-3">
             <button
               onClick={() => setConfirmLogout(false)}
-              className="flex-1 h-12 rounded-full border-[1.5px] border-forest text-forest font-semibold text-[14px]"
+              className="flex-1 h-12 rounded-full border-[1.5px] border-forest text-forest font-semibold text-[14px] active:scale-[0.99] transition-transform"
             >
               Cancel
             </button>
             <button
               onClick={handleLogout}
-              className="flex-1 h-12 rounded-full bg-red-500 text-white font-semibold text-[14px]"
+              className="flex-1 h-12 rounded-full bg-red-500 text-white font-semibold text-[14px] active:scale-[0.99] transition-transform"
             >
               Confirm Logout
             </button>

@@ -3,6 +3,39 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
+const CARD_SHADOW = 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03]';
+
+function SectionLabel({ children, className = '' }) {
+  return (
+    <p className={`text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5 ${className}`}>
+      {children}
+    </p>
+  );
+}
+
+function InfoRow({ label, value, last = false }) {
+  const borderClass = last ? '' : 'border-b border-sage/10';
+  return (
+    <div className={`flex items-center justify-between px-4 py-3.5 ${borderClass}`}>
+      <span className='text-[12.5px] text-gray-500'>{label}</span>
+      <span className='text-[13px] font-semibold text-gray-900 text-right truncate max-w-[220px]'>
+        {value || '-'}
+      </span>
+    </div>
+  );
+}
+
+function QuickAction({ href, icon, label }) {
+  return (
+    <a href={href} className={`flex-1 flex flex-col items-center gap-1.5 bg-white rounded-2xl py-3.5 active:scale-[0.97] transition-transform ${CARD_SHADOW}`}>
+      <div className='w-9 h-9 rounded-full bg-forest flex items-center justify-center'>
+        <img src={icon} alt='' className='w-4 h-4' />
+      </div>
+      <span className='text-[11.5px] font-semibold text-gray-700'>{label}</span>
+    </a>
+  );
+}
+
 export default function ContactDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -47,18 +80,15 @@ export default function ContactDetail() {
     setMenuOpen(false);
     const text = buildShareText();
 
-    // Native share sheet (WhatsApp, SMS, Email, any installed app) where supported
     if (navigator.share) {
       try {
         await navigator.share({ title: contact.name, text });
         return;
       } catch (err) {
-        // User cancelled the native sheet — fall through to nothing further
         return;
       }
     }
 
-    // Fallback: show our own action sheet with direct platform links
     setShareSheetOpen(true);
   }
 
@@ -189,8 +219,6 @@ export default function ContactDetail() {
 
   function getInitials(name) {
     if (!name) return '?';
-    // Strip anything that isn't a letter or whitespace (bullets, dashes,
-    // dots, etc.) so symbols never end up rendered as an "initial".
     const cleaned = name.replace(/[^a-zA-Z\s]/g, '').trim();
     if (!cleaned) return '?';
     return cleaned
@@ -223,18 +251,9 @@ export default function ContactDetail() {
     return (
       <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
         <div className='flex items-center gap-1.5'>
-          <span
-            className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
-            style={{ animationDelay: '0ms' }}
-          />
-          <span
-            className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
-            style={{ animationDelay: '150ms' }}
-          />
-          <span
-            className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
-            style={{ animationDelay: '300ms' }}
-          />
+          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
+          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     );
@@ -242,15 +261,16 @@ export default function ContactDetail() {
 
   if (!contact) {
     return (
-      <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
-        <p className='text-gray-500 text-[14px]'>Contact not found.</p>
+      <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col items-center justify-center gap-3 px-8'>
+        <div className='w-14 h-14 rounded-full bg-sage/10 flex items-center justify-center'>
+          <img src='/assets/icons/about-support.svg' alt='' className='w-6 h-6 opacity-40' />
+        </div>
+        <p className='text-gray-500 text-[13.5px]'>Contact not found.</p>
       </div>
     );
   }
 
-  const pendingReminder = contact.reminders?.find(
-    (r) => r.status === 'pending',
-  );
+  const pendingReminder = contact.reminders?.find((r) => r.status === 'pending');
   const activityEvents = [
     {
       date: contact.createdAt,
@@ -270,68 +290,39 @@ export default function ContactDetail() {
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg px-5 pt-5 pb-10 relative'>
-      {/* Header */}
-      <div className='flex items-center justify-between mb-5'>
-        <button
-          onClick={() => navigate(-1)}
-          className='w-9 h-9 flex items-center justify-center -ml-1'
-        >
-          <img
-            src='/assets/icons/arrow-left.svg'
-            alt='back'
-            className='w-5 h-5'
-          />
+    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col relative'>
+
+      <div className='bg-sage flex items-center justify-between px-5 h-14 shrink-0 shadow-sm sticky top-0 z-30'>
+        <button onClick={() => navigate(-1)} className='w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors'>
+          <img src='/assets/icons/arrow-left.svg' alt='back' className='w-5 h-5' />
         </button>
-        <span className='font-bold text-[17px] text-gray-900 capitalize'>
+        <span className='font-semibold text-[16px] text-white capitalize'>
           {contact.relationshipType || 'Contact'}
         </span>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className='w-9 h-9 flex items-center justify-center'
-        >
-          <img
-            src='/assets/icons/more-vertical.svg'
-            alt='menu'
-            className='w-5 h-5'
-          />
+        <button onClick={() => setMenuOpen(!menuOpen)} className='w-9 h-9 flex items-center justify-center rounded-full active:bg-white/10 transition-colors'>
+          <img src='/assets/icons/more-vertical.svg' alt='menu' className='w-5 h-5' />
         </button>
       </div>
 
       {menuOpen && (
         <>
-          <div
-            className='fixed inset-0 z-40'
-            onClick={() => setMenuOpen(false)}
-          />
-          <div className='absolute right-5 top-14 z-50 bg-white rounded-2xl shadow-lg py-2 w-44'>
-            <button
-              onClick={() => navigate(`/contacts/${id}/edit`)}
-              className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800'
-            >
-              <img src='/assets/icons/edit.svg' alt='' className='w-4 h-4' />{' '}
+          <div className='fixed inset-0 z-40' onClick={() => setMenuOpen(false)} />
+          <div className={`absolute right-5 top-16 z-50 bg-white rounded-2xl py-1.5 w-48 overflow-hidden ${CARD_SHADOW} shadow-[0_12px_32px_-8px_rgba(0,0,0,0.18)]`}>
+            <button onClick={() => navigate(`/contacts/${id}/edit`)} className='w-full flex items-center gap-3 px-4 py-3 text-[13.5px] font-medium text-gray-800 active:bg-gray-50'>
+              <img src='/assets/icons/edit.svg' alt='' className='w-4 h-4 opacity-70' />
               Edit Contact
             </button>
-            <button
-              onClick={handleShare}
-              className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800'
-            >
-              <img src='/assets/icons/share.svg' alt='' className='w-4 h-4' />{' '}
+            <button onClick={handleShare} className='w-full flex items-center gap-3 px-4 py-3 text-[13.5px] font-medium text-gray-800 active:bg-gray-50'>
+              <img src='/assets/icons/share.svg' alt='' className='w-4 h-4 opacity-70' />
               Share
             </button>
-            <button
-              onClick={handleExportSingle}
-              disabled={menuBusy}
-              className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-gray-800 disabled:opacity-50'
-            >
-              <img src='/assets/icons/export.svg' alt='' className='w-4 h-4' />{' '}
+            <button onClick={handleExportSingle} disabled={menuBusy} className='w-full flex items-center gap-3 px-4 py-3 text-[13.5px] font-medium text-gray-800 active:bg-gray-50 disabled:opacity-50'>
+              <img src='/assets/icons/export.svg' alt='' className='w-4 h-4 opacity-70' />
               {menuBusy ? 'Exporting...' : 'Export'}
             </button>
-            <button
-              onClick={handleDelete}
-              className='w-full flex items-center gap-3 px-4 py-2.5 text-[14px] text-red-600'
-            >
-              <img src='/assets/icons/trash.svg' alt='' className='w-4 h-4' />{' '}
+            <div className='border-t border-gray-100 my-1' />
+            <button onClick={handleDelete} className='w-full flex items-center gap-3 px-4 py-3 text-[13.5px] font-medium text-red-600 active:bg-red-50'>
+              <img src='/assets/icons/trash.svg' alt='' className='w-4 h-4' />
               Delete
             </button>
           </div>
@@ -340,352 +331,219 @@ export default function ContactDetail() {
 
       {shareSheetOpen && (
         <>
-          <div
-            className='fixed inset-0 bg-black/40 z-40'
-            onClick={() => setShareSheetOpen(false)}
-          />
-          <div className='fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white rounded-t-3xl z-50 p-5 pb-8'>
-            <div className='w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5' />
-            <p className='text-[15px] font-bold text-gray-900 mb-4'>
-              Share Contact
-            </p>
+          <div className='fixed inset-0 bg-black/40 z-40' onClick={() => setShareSheetOpen(false)} />
+          <div className='fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white rounded-t-3xl z-50 p-5 pb-8 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.2)]'>
+            <div className='w-10 h-1 rounded-full bg-gray-300 mx-auto mb-6' />
+            <p className='text-[15px] font-bold text-gray-900 mb-4'>Share Contact</p>
 
             <div className='flex flex-col gap-1'>
-              <button
-                onClick={shareToWhatsApp}
-                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
-              >
-                <img
-                  src='/assets/icons/share-whatsapp.svg'
-                  alt=''
-                  className='w-6 h-6'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  WhatsApp
-                </span>
-              </button>
-              <button
-                onClick={shareViaEmail}
-                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
-              >
-                <img
-                  src='/assets/icons/share-email.svg'
-                  alt=''
-                  className='w-6 h-6'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Email
-                </span>
-              </button>
-              <button
-                onClick={shareViaSMS}
-                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
-              >
-                <img
-                  src='/assets/icons/share-sms.svg'
-                  alt=''
-                  className='w-6 h-6'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  SMS
-                </span>
-              </button>
-              <button
-                onClick={copyDetails}
-                className='w-full flex items-center gap-3.5 px-2 py-3 rounded-xl text-left'
-              >
-                <img
-                  src='/assets/icons/share-copy.svg'
-                  alt=''
-                  className='w-6 h-6'
-                />
-                <span className='text-[14px] font-medium text-gray-800'>
-                  Copy Details
-                </span>
-              </button>
+              {[
+                { onClick: shareToWhatsApp, icon: '/assets/icons/share-whatsapp.svg', label: 'WhatsApp' },
+                { onClick: shareViaEmail, icon: '/assets/icons/share-email.svg', label: 'Email' },
+                { onClick: shareViaSMS, icon: '/assets/icons/share-sms.svg', label: 'SMS' },
+                { onClick: copyDetails, icon: '/assets/icons/share-copy.svg', label: 'Copy Details' },
+              ].map((opt) => (
+                <button key={opt.label} onClick={opt.onClick} className='w-full flex items-center gap-3.5 px-2.5 py-3 rounded-xl text-left active:bg-gray-50 transition-colors'>
+                  <div className='w-9 h-9 rounded-full bg-sage/10 flex items-center justify-center shrink-0'>
+                    <img src={opt.icon} alt='' className='w-4 h-4' />
+                  </div>
+                  <span className='text-[14px] font-medium text-gray-800'>{opt.label}</span>
+                </button>
+              ))}
             </div>
           </div>
         </>
       )}
 
-      {/* Avatar + name + actions */}
-      <div className='flex items-center gap-4 mb-4'>
-        <div className='w-14 h-14 rounded-full border-2 border-forest flex items-center justify-center text-forest font-bold text-[16px] shrink-0'>
-          {getInitials(contact.name)}
-        </div>
-        <div>
-          <p className='font-bold text-[16px] text-gray-900'>{contact.name}</p>
-          <p className='text-[13px] text-gray-500'>{contact.designation}</p>
-        </div>
-      </div>
+      <div className='flex-1 px-5 pt-6 pb-12'>
 
-      <div className='flex gap-2 mb-6'>
-        <a
-          href={`tel:${contact.phone}`}
-          className='flex-1 h-10 rounded-full bg-forest text-white text-[13px] font-semibold flex items-center justify-center gap-1.5'
-        >
-          <img src='/assets/icons/phone.svg' alt='' className='w-4 h-4' /> Call
-        </a>
-        <a
-          href={`mailto:${contact.email}`}
-          className='flex-1 h-10 rounded-full bg-forest text-white text-[13px] font-semibold flex items-center justify-center gap-1.5'
-        >
-          <img src='/assets/icons/mail-white.svg' alt='' className='w-4 h-4' />{' '}
-          Email
-        </a>
-        <a
-          href={`https://wa.me/${contact.phone?.replace(/\D/g, '')}`}
-          className='flex-1 h-10 rounded-full bg-forest text-white text-[13px] font-semibold flex items-center justify-center gap-1.5'
-        >
-          <img src='/assets/icons/whatsapp.svg' alt='' className='w-4 h-4' />{' '}
-          Whatsapp
-        </a>
-      </div>
-
-      <div className='border-t border-forest/20 mb-4' />
-
-      {/* Contact Information */}
-      <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
-        Contact Information
-      </p>
-      <div className='grid grid-cols-2 gap-y-2 mb-4 text-[13px] text-gray-800'>
-        <p>
-          <span className='text-gray-500'>Mobile Number: </span>
-          {contact.phone}
-        </p>
-        <p>
-          <span className='text-gray-500'>Website: </span>
-          {contact.website}
-        </p>
-        <p className='col-span-2'>
-          <span className='text-gray-500'>Email: </span>
-          {contact.email}
-        </p>
-      </div>
-
-      <div className='border-t border-forest/20 mb-4' />
-
-      {/* Contact Source / Collected By / Assign To */}
-      <div className='flex items-center justify-between mb-4 text-[13px]'>
-        <div>
-          <p className='mb-1.5'>
-            <span className='text-gray-500'>Contact Source: </span>
-            <span className='font-semibold text-gray-900'>{contact.event}</span>
-          </p>
-          <p>
-            <span className='text-gray-500'>Collected By: </span>
-            <span className='font-semibold text-gray-900'>
-              {contact.collectedBy?.firstName || '—'}
-            </span>
-          </p>
+        <div className='flex items-center gap-4 mb-6'>
+          <div className='w-16 h-16 rounded-full bg-forest/10 ring-2 ring-forest/20 flex items-center justify-center text-forest font-bold text-[17px] shrink-0'>
+            {getInitials(contact.name)}
+          </div>
+          <div className='min-w-0'>
+            <p className='font-bold text-[17px] text-gray-900 truncate'>{contact.name}</p>
+            <p className='text-[13px] text-gray-500 truncate'>{contact.designation}</p>
+          </div>
         </div>
 
-        {isAdmin && (
-          <div className='flex flex-col items-end gap-1.5'>
-            <span className='text-gray-500 text-[13px]'>Assign To</span>
+        <div className='flex gap-2.5 mb-8'>
+          <QuickAction href={`tel:${contact.phone}`} icon='/assets/icons/phone.svg' label='Call' />
+          <QuickAction href={`mailto:${contact.email}`} icon='/assets/icons/mail-white.svg' label='Email' />
+          <QuickAction href={`https://wa.me/${contact.phone?.replace(/\D/g, '')}`} icon='/assets/icons/whatsapp.svg' label='WhatsApp' />
+        </div>
+
+        <SectionLabel>Contact Information</SectionLabel>
+        <div className={`bg-white rounded-2xl mb-8 overflow-hidden ${CARD_SHADOW}`}>
+          <InfoRow label='Mobile Number' value={contact.phone} />
+          <InfoRow label='Website' value={contact.website} />
+          <InfoRow label='Email' value={contact.email} last={true} />
+        </div>
+
+        <SectionLabel>Lead Details</SectionLabel>
+        <div className={`bg-white rounded-2xl mb-8 overflow-hidden ${CARD_SHADOW}`}>
+          <InfoRow label='Contact Source' value={contact.event} />
+          <InfoRow label='Collected By' value={contact.collectedBy?.firstName} last={!isAdmin} />
+          {isAdmin && (
+            <div className='flex items-center justify-between px-4 py-3.5'>
+              <span className='text-[12.5px] text-gray-500'>Assign To</span>
+              <select
+                value={contact.assignedTo?._id || ''}
+                onChange={(e) => handleAssign(e.target.value)}
+                disabled={assigning}
+                className='h-8 px-3 rounded-full text-[12.5px] font-semibold text-gray-800 bg-sage/10 border-none outline-none'
+              >
+                <option value=''>Select</option>
+                {team.map((member) => (
+                  <option key={member._id} value={member._id}>
+                    {member.firstName} {member.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {pendingReminder && (
+          <>
+            <div className='flex items-center justify-between mb-2.5 px-1'>
+              <SectionLabel className='mb-0'>Upcoming Reminder</SectionLabel>
+              <button onClick={() => markReminderComplete(pendingReminder._id)} className='h-7 px-3.5 rounded-full bg-forest text-white text-[11.5px] font-semibold active:scale-95 transition-transform'>
+                Mark Complete
+              </button>
+            </div>
+            <div className={`flex items-center justify-between bg-white rounded-2xl px-4 py-3.5 mb-8 ${CARD_SHADOW}`}>
+              <div className='flex items-center gap-2.5'>
+                <span className='w-2 h-2 rounded-full bg-amber-500 shrink-0' />
+                <span className='text-[13px] text-gray-800 capitalize'>
+                  {pendingReminder.note || (pendingReminder.task ? pendingReminder.task.replace(/_/g, ' ') : 'Follow-up reminder')}
+                </span>
+              </div>
+              <span className='text-[12.5px] text-gray-500 shrink-0 ml-2'>
+                {formatDate(pendingReminder.dueDate)}
+              </span>
+            </div>
+          </>
+        )}
+
+        {!showReminderForm ? (
+          <button onClick={() => setShowReminderForm(true)} className='w-full h-12 rounded-2xl border-[1.5px] border-dashed border-forest/40 text-forest text-[13.5px] font-semibold mb-8 active:bg-forest/5 transition-colors'>
+            + Add Reminder
+          </button>
+        ) : (
+          <div className={`bg-white rounded-2xl p-4 mb-8 ${CARD_SHADOW}`}>
+            <p className='text-[12px] font-semibold text-gray-500 mb-2'>Task</p>
             <select
-              value={contact.assignedTo?._id || ''}
-              onChange={(e) => handleAssign(e.target.value)}
-              disabled={assigning}
-              className='h-9 px-3 rounded-full text-[13px] text-gray-800 bg-white/70 border-none outline-none'
+              value={reminderTask}
+              onChange={(e) => setReminderTask(e.target.value)}
+              className='w-full h-11 rounded-xl px-3 mb-3 text-[13.5px] bg-sage/5 border border-sage/20 outline-none focus:border-forest/40 transition-colors'
             >
-              <option value=''>Select</option>
-              {team.map((member) => (
-                <option key={member._id} value={member._id}>
-                  {member.firstName} {member.lastName}
-                </option>
-              ))}
+              <option value='call'>Call</option>
+              <option value='send_quotation'>Send Quotation</option>
+              <option value='schedule_meeting'>Schedule Meeting</option>
+              <option value='follow-up'>Follow-up</option>
+              <option value='email'>Email</option>
             </select>
+
+            <div className='flex gap-2 mb-3'>
+              <input
+                type='date'
+                value={reminderDate}
+                onChange={(e) => setReminderDate(e.target.value)}
+                className='flex-1 h-11 rounded-xl px-3 text-[13.5px] bg-sage/5 border border-sage/20 outline-none focus:border-forest/40 transition-colors'
+              />
+              <input
+                type='time'
+                value={reminderTime}
+                onChange={(e) => setReminderTime(e.target.value)}
+                className='flex-1 h-11 rounded-xl px-3 text-[13.5px] bg-sage/5 border border-sage/20 outline-none focus:border-forest/40 transition-colors'
+              />
+            </div>
+
+            <div className='flex gap-2 mb-4'>
+              {['low', 'medium', 'high'].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setReminderPriority(p)}
+                  className={`flex-1 h-9 rounded-full text-[12.5px] font-semibold capitalize transition-colors ${reminderPriority === p ? 'bg-forest text-white' : 'bg-sage/10 text-gray-600'}`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            <div className='flex gap-2'>
+              <button onClick={() => setShowReminderForm(false)} className='flex-1 h-11 rounded-full border border-gray-200 text-gray-600 text-[13px] font-semibold active:bg-gray-50 transition-colors'>
+                Cancel
+              </button>
+              <button
+                onClick={submitReminder}
+                disabled={savingReminder || !reminderDate}
+                className='flex-1 h-11 rounded-full bg-forest text-white text-[13px] font-semibold disabled:opacity-50 active:scale-[0.98] transition-transform'
+              >
+                {savingReminder ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {contact.notes?.length > 0 && (
+          <>
+            <SectionLabel>Notes</SectionLabel>
+            <div className={`bg-white rounded-2xl px-4 py-3.5 mb-8 flex flex-col gap-2 ${CARD_SHADOW}`}>
+              {contact.notes.map((n) => (
+                <p key={n._id} className='text-[13px] text-gray-800 leading-relaxed'>
+                  {n.content}
+                </p>
+              ))}
+            </div>
+          </>
+        )}
+
+        {contact.notes?.some((n) => n.audioUrl?.trim()) && (
+          <>
+            <SectionLabel>Voice Note</SectionLabel>
+            <div className='flex flex-col gap-3 mb-8'>
+              {contact.notes
+                .filter((n) => n.audioUrl?.trim())
+                .map((n) => (
+                  <audio key={n._id} controls preload='metadata' className='w-full rounded-xl'>
+                    <source src={n.audioUrl} type='audio/webm' />
+                    Your browser does not support the audio element.
+                  </audio>
+                ))}
+            </div>
+          </>
+        )}
+
+        {contact.cardImageUrl && (
+          <>
+            <SectionLabel>Business Card</SectionLabel>
+            <img src={contact.cardImageUrl} alt='Business card' className={`w-full rounded-2xl mb-8 ${CARD_SHADOW}`} />
+          </>
+        )}
+
+        <button onClick={() => setHistoryOpen(!historyOpen)} className={`w-full flex items-center justify-between bg-white rounded-2xl px-4 py-3.5 mb-2 ${CARD_SHADOW}`}>
+          <span className='text-[13.5px] font-semibold text-gray-700'>Activity History</span>
+          <img src='/assets/icons/chevron-down.svg' alt='' className={`w-4 h-4 opacity-50 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {historyOpen && (
+          <div className={`bg-white rounded-2xl overflow-hidden ${CARD_SHADOW}`}>
+            {activityEvents.map((event, i) => {
+              const borderClass = i > 0 ? 'border-t border-sage/10' : '';
+              return (
+                <div key={i} className={`flex items-center justify-between px-4 py-3.5 text-[12.5px] ${borderClass}`}>
+                  <span className='text-gray-500'>{formatDate(event.date)}</span>
+                  <span className='text-gray-900 font-medium text-right'>
+                    {event.label} <span className='text-gray-400 font-normal'>(By {event.by})</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
-
-      <div className='border-t border-forest/20 mb-4' />
-
-      {/* Upcoming Reminder */}
-      {pendingReminder && (
-        <>
-          <div className='flex items-center justify-between mb-2.5'>
-            <p className='text-[13px] font-semibold text-gray-500'>
-              Upcoming Reminder
-            </p>
-            <button
-              onClick={() => markReminderComplete(pendingReminder._id)}
-              className='h-8 px-4 rounded-full bg-forest text-white text-[12px] font-semibold'
-            >
-              Mark Complete
-            </button>
-          </div>
-          <div className='flex items-center justify-between bg-white/70 rounded-2xl px-4 py-3 mb-4'>
-            <span className='text-[13px] text-gray-800 capitalize'>
-              {pendingReminder.note ||
-                (pendingReminder.task
-                  ? pendingReminder.task.replace(/_/g, ' ')
-                  : 'Follow-up reminder')}
-            </span>
-            <span className='text-[13px] text-gray-600'>
-              {formatDate(pendingReminder.dueDate)}
-            </span>
-          </div>
-          <div className='border-t border-forest/20 mb-4' />
-        </>
-      )}
-
-      {!showReminderForm ? (
-        <button
-          onClick={() => setShowReminderForm(true)}
-          className='w-full h-11 rounded-full border-[1.5px] border-forest text-forest text-[13px] font-semibold mb-4'
-        >
-          + Add Reminder
-        </button>
-      ) : (
-        <div className='bg-white rounded-2xl p-4 mb-4'>
-          <p className='text-[13px] font-semibold text-gray-600 mb-2'>Task</p>
-          <select
-            value={reminderTask}
-            onChange={(e) => setReminderTask(e.target.value)}
-            className='w-full h-11 rounded-xl px-3 mb-3 text-[14px] bg-white border border-forest/30 outline-none'
-          >
-            <option value='call'>Call</option>
-            <option value='send_quotation'>Send Quotation</option>
-            <option value='schedule_meeting'>Schedule Meeting</option>
-            <option value='follow-up'>Follow-up</option>
-            <option value='email'>Email</option>
-          </select>
-
-          <div className='flex gap-2 mb-3'>
-            <input
-              type='date'
-              value={reminderDate}
-              onChange={(e) => setReminderDate(e.target.value)}
-              className='flex-1 h-11 rounded-xl px-3 text-[14px] bg-white border border-forest/30 outline-none'
-            />
-            <input
-              type='time'
-              value={reminderTime}
-              onChange={(e) => setReminderTime(e.target.value)}
-              className='flex-1 h-11 rounded-xl px-3 text-[14px] bg-white border border-forest/30 outline-none'
-            />
-          </div>
-
-          <div className='flex gap-4 mb-4'>
-            {['low', 'medium', 'high'].map((p) => (
-              <button
-                key={p}
-                onClick={() => setReminderPriority(p)}
-                className='flex items-center gap-2'
-              >
-                <span
-                  className={`w-4 h-4 rounded-full border-2 border-gray-400 flex items-center justify-center ${reminderPriority === p ? 'border-forest' : ''}`}
-                >
-                  {reminderPriority === p && (
-                    <span className='w-2 h-2 rounded-full bg-forest' />
-                  )}
-                </span>
-                <span className='text-[13px] text-gray-700 capitalize'>
-                  {p}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className='flex gap-2'>
-            <button
-              onClick={() => setShowReminderForm(false)}
-              className='flex-1 h-10 rounded-full border border-gray-300 text-gray-600 text-[13px] font-semibold'
-            >
-              Cancel
-            </button>
-            <button
-              onClick={submitReminder}
-              disabled={savingReminder || !reminderDate}
-              className='flex-1 h-10 rounded-full bg-forest text-white text-[13px] font-semibold disabled:opacity-60'
-            >
-              {savingReminder ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Notes */}
-      {contact.notes?.length > 0 && (
-        <>
-          <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
-            Notes
-          </p>
-          <div className='border-[1.5px] border-forest/30 rounded-2xl px-4 py-3 mb-4 text-[13px] text-gray-800'>
-            {contact.notes.map((n) => (
-              <p key={n._id}>{n.content}</p>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Voice Note */}
-      {contact.notes?.some((n) => n.audioUrl?.trim()) && (
-        <>
-          <p className='text-[13px] font-semibold text-gray-500 mb-2.5'>
-            Voice Note
-          </p>
-
-          {contact.notes
-            .filter((n) => n.audioUrl?.trim())
-            .map((n) => (
-              <audio
-                key={n._id}
-                controls
-                preload='metadata'
-                className='w-full mb-4 rounded-xl'
-              >
-                <source src={n.audioUrl} type='audio/webm' />
-                Your browser does not support the audio element.
-              </audio>
-            ))}
-        </>
-      )}
-
-      {/* Card image */}
-      {contact.cardImageUrl && (
-        <img
-          src={contact.cardImageUrl}
-          alt='Business card'
-          className='w-full rounded-2xl border-2 border-forest/30 mb-4'
-        />
-      )}
-
-      {/* Activity History */}
-      <button
-        onClick={() => setHistoryOpen(!historyOpen)}
-        className='w-full flex items-center justify-between bg-white/60 rounded-2xl px-4 py-3 mb-2'
-      >
-        <span className='text-[14px] font-semibold text-gray-500'>
-          Activity History
-        </span>
-        <img
-          src='/assets/icons/chevron-down.svg'
-          alt=''
-          className={`w-4 h-4 transition-transform ${historyOpen ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {historyOpen && (
-        <div className='flex flex-col'>
-          {activityEvents.map((event, i) => (
-            <div
-              key={i}
-              className='flex items-center justify-between py-3 border-t border-gray-200 text-[13px]'
-            >
-              <span className='text-gray-600'>{formatDate(event.date)}</span>
-              <span className='text-gray-900 font-medium'>
-                {event.label}{' '}
-                <span className='text-gray-400 font-normal'>
-                  (By {event.by})
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
