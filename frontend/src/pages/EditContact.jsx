@@ -4,6 +4,7 @@ import api from '../utils/api';
 
 const RELATION_TYPES = ['Lead', 'Vendor', 'Customer', 'Partner'];
 const CONTACT_SOURCES = ['GREENS 2026', 'Factory Visit', 'GCPRS 2026', 'Other'];
+const CARD_SHADOW = 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03]';
 
 const FIELDS = [
   { key: 'name', label: 'Name' },
@@ -18,11 +19,11 @@ const FIELDS = [
 function FormField({ label, value, onChange }) {
   return (
     <div>
-      <label className='block text-[12.5px] font-semibold text-gray-500 mb-1.5'>{label}</label>
+      <label className="block text-[12.5px] font-semibold text-gray-500 mb-1.5">{label}</label>
       <input
         value={value}
         onChange={onChange}
-        className='w-full h-12 rounded-xl px-4 text-[14.5px] text-gray-900 bg-white border border-sage/20 outline-none focus:border-forest/40 transition-colors'
+        className="w-full h-12 rounded-xl px-4 text-[14.5px] text-gray-900 bg-white border border-sage/20 outline-none focus:border-forest/40 transition-colors"
       />
     </div>
   );
@@ -30,21 +31,30 @@ function FormField({ label, value, onChange }) {
 
 function ChipGroup({ title, options, selected, onSelect }) {
   return (
-    <div className='mb-8'>
-      <p className='text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5'>{title}</p>
-      <div className='flex gap-2 flex-wrap'>
-        {options.map((option) => (
-          <button
-            key={option}
-            onClick={() => onSelect(option)}
-            className={`h-9 px-4 rounded-full text-[13px] font-medium transition-colors ${
-              selected === option ? 'bg-forest text-white' : 'bg-white text-gray-500 ring-1 ring-black/[0.03]'
-            }`}
-          >
-            {option}
-          </button>
-        ))}
+    <div>
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5">{title}</p>
+      <div className="flex gap-2 flex-wrap">
+        {options.map((option) => {
+          const cls = `h-9 px-4 rounded-full text-[13px] font-medium transition-colors ${
+            selected === option ? 'bg-forest text-white' : `bg-white text-gray-500 ${CARD_SHADOW}`
+          }`;
+          return (
+            <button key={option} onClick={() => onSelect(option)} className={cls}>
+              {option}
+            </button>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+function EditContactSkeleton() {
+  return (
+    <div className="flex-1 px-5 pt-6 pb-10 flex flex-col gap-3.5">
+      {[...Array(7)].map((_, i) => (
+        <div key={i} className="h-12 rounded-xl bg-white/70 animate-pulse" />
+      ))}
     </div>
   );
 }
@@ -121,76 +131,58 @@ export default function EditContact() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex items-center justify-center'>
-        <div className='flex items-center gap-1.5'>
-          <span className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce' style={{ animationDelay: '0ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce' style={{ animationDelay: '150ms' }} />
-          <span className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce' style={{ animationDelay: '300ms' }} />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
+    <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
 
-      <div className='bg-sage flex items-center justify-between px-5 h-14 shrink-0 shadow-sm sticky top-0 z-10'>
-        <button
-          onClick={() => navigate(-1)}
-          className='w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors'
-        >
-          <img src='/assets/icons/arrow-left.svg' alt='back' className='w-5 h-5' />
+      {/* Header */}
+      <div className="bg-gradient-to-br from-sage to-forest flex items-center justify-between px-5 h-16 shrink-0 rounded-b-[28px] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.15)] sticky top-0 z-10">
+        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors">
+          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5 brightness-0 invert" />
         </button>
-        <span className='font-semibold text-[16px] text-white'>Edit Contact</span>
-        <div className='w-9 h-9' />
+        <span className="font-semibold text-[16px] text-white">Edit Contact</span>
+        <div className="w-9 h-9" />
       </div>
 
-      <div className='flex-1 px-5 pt-6 pb-10'>
+      {loading ? (
+        <EditContactSkeleton />
+      ) : (
+        <div className="flex-1 px-5 pt-6 pb-10 flex flex-col gap-8">
 
-        {error && (
-          <div className='bg-red-50 ring-1 ring-red-100 text-red-600 text-[13px] rounded-2xl px-4 py-3 mb-5'>
-            {error}
+          {error && (
+            <div className="bg-red-50 ring-1 ring-red-100 text-red-600 text-[13px] rounded-2xl px-4 py-3 -mb-3">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5">
+              Contact Details
+            </p>
+            <div className="flex flex-col gap-3.5">
+              {FIELDS.map((field) => (
+                <FormField
+                  key={field.key}
+                  label={field.label}
+                  value={form[field.key]}
+                  onChange={(e) => handleChange(field.key, e.target.value)}
+                />
+              ))}
+            </div>
           </div>
-        )}
 
-        <p className='text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-2.5'>
-          Contact Details
-        </p>
-        <div className='flex flex-col gap-3.5 mb-8'>
-          {FIELDS.map((field) => (
-            <FormField
-              key={field.key}
-              label={field.label}
-              value={form[field.key]}
-              onChange={(e) => handleChange(field.key, e.target.value)}
-            />
-          ))}
+          <ChipGroup title="Relation Type" options={RELATION_TYPES} selected={relationType} onSelect={setRelationType} />
+
+          <ChipGroup title="Contact Source" options={CONTACT_SOURCES} selected={contactSource} onSelect={setContactSource} />
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full h-12 rounded-full font-semibold text-[14.5px] bg-forest text-white disabled:opacity-60 active:scale-[0.98] transition-transform shadow-[0_4px_14px_-4px_rgba(64,101,80,0.4)]"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
         </div>
-
-        <ChipGroup
-          title='Relation Type'
-          options={RELATION_TYPES}
-          selected={relationType}
-          onSelect={setRelationType}
-        />
-
-        <ChipGroup
-          title='Contact Source'
-          options={CONTACT_SOURCES}
-          selected={contactSource}
-          onSelect={setContactSource}
-        />
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className='w-full h-12 rounded-full font-semibold text-[14.5px] bg-forest text-white disabled:opacity-60 active:scale-[0.98] transition-transform'
-        >
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
+      )}
     </div>
   );
 }

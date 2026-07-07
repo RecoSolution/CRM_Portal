@@ -19,6 +19,20 @@ function getInitials(name) {
     .toUpperCase();
 }
 
+function Header({ onBack }) {
+  return (
+    <div className="bg-gradient-to-br from-sage to-forest px-5 pt-5 pb-7 shrink-0 rounded-b-[32px] shadow-[0_10px_28px_-10px_rgba(0,0,0,0.18)] sticky top-0 z-10">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors">
+          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5 brightness-0 invert" />
+        </button>
+        <span className="text-white font-semibold text-[16px]">Task Details</span>
+        <div className="w-9 h-9" />
+      </div>
+    </div>
+  );
+}
+
 export default function TaskDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -144,13 +158,7 @@ export default function TaskDetail() {
   if (loading || !task) {
     return (
       <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
-        <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0">
-          <button onClick={() => navigate('/tasks')} className="w-9 h-9 flex items-center justify-center -ml-1">
-            <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
-          </button>
-          <span className="text-white font-semibold text-[16px]">Task Details</span>
-          <div className="w-9 h-9" />
-        </div>
+        <Header onBack={() => navigate('/tasks')} />
         <div className="flex-1 px-5 pt-7">
           <div className="flex flex-col gap-3">
             <div className="h-[60px] rounded-2xl bg-white/70 animate-pulse" />
@@ -164,13 +172,7 @@ export default function TaskDetail() {
 
   return (
     <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
-      <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0">
-        <button onClick={() => navigate('/tasks')} className="w-9 h-9 flex items-center justify-center -ml-1">
-          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
-        </button>
-        <span className="text-white font-semibold text-[16px]">Task Details</span>
-        <div className="w-9 h-9" />
-      </div>
+      <Header onBack={() => navigate('/tasks')} />
 
       <div className="flex-1 px-5 pt-6 pb-10 overflow-y-auto">
         {error && (

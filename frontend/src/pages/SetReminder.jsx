@@ -33,20 +33,23 @@ export default function SetReminder() {
   return (
     <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
 
-      <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0">
-        <button
-          onClick={() => navigate(-1)}
-          className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"
-        >
-          <img src="/assets/icons/close.svg" alt="close" className="w-4 h-4 brightness-0 invert" />
-        </button>
-        <span className="text-white font-bold text-[16px]">Reminder</span>
-        <button
-          onClick={handleSet}
-          className="h-9 px-4 rounded-full bg-forest text-white text-[13px] font-semibold active:scale-[0.97] transition-transform"
-        >
-          Save
-        </button>
+      {/* Header — curved bottom edge, matches app shell; keeps modal-style close/save actions */}
+      <div className="bg-gradient-to-br from-sage to-forest px-5 pt-5 pb-7 shrink-0 rounded-b-[32px] shadow-[0_10px_28px_-10px_rgba(0,0,0,0.18)] sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:bg-white/25 transition-colors"
+          >
+            <img src="/assets/icons/close.svg" alt="close" className="w-4 h-4 brightness-0 invert" />
+          </button>
+          <span className="text-white font-semibold text-[16px]">Reminder</span>
+          <button
+            onClick={handleSet}
+            className="h-9 px-4 rounded-full bg-white text-forest text-[13px] font-semibold active:scale-[0.97] transition-transform"
+          >
+            Save
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 px-5 pt-7 pb-10">

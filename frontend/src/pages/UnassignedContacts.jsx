@@ -110,9 +110,10 @@ export default function UnassignedContacts() {
   return (
     <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
 
-      <div className="bg-gradient-to-br from-sage to-forest px-5 pt-5 pb-7 shrink-0">
+      {/* Header — curved bottom edge, matches app shell */}
+      <div className="bg-gradient-to-br from-sage to-forest px-5 pt-5 pb-7 shrink-0 rounded-b-[32px] shadow-[0_10px_28px_-10px_rgba(0,0,0,0.18)] sticky top-0 z-10">
         <div className="flex items-center justify-between mb-1">
-          <button onClick={() => navigate('/team-dashboard')} className="w-9 h-9 flex items-center justify-center -ml-1">
+          <button onClick={() => navigate('/team-dashboard')} className="w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors">
             <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5 brightness-0 invert" />
           </button>
           <span className="text-white font-semibold text-[16px]">Unassigned Contacts</span>

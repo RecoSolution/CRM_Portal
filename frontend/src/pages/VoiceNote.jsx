@@ -319,77 +319,87 @@ export default function VoiceNote() {
   }
 
   return (
-    <div className='max-w-[480px] mx-auto min-h-screen bg-bg px-6 pt-5 pb-10 flex flex-col'>
-      <button
-        onClick={handleCancel}
-        className='w-10 h-10 flex items-center justify-center -ml-2 mb-4'
-      >
-        <img
-          src='/assets/icons/arrow-left.svg'
-          alt='back'
-          className='w-5 h-5'
-        />
-      </button>
+    <div className='max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col'>
 
-      <div className='flex flex-col items-center justify-center py-4'>
-        <div className='relative w-[140px] h-[140px] flex items-center justify-center mb-4'>
-          {recording && (
-            <span className='absolute inset-0 rounded-full bg-sage/40 animate-ping' />
-          )}
-
-          <span className='absolute inset-3 rounded-full bg-sage/60' />
-
-          <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
-            {finishing ? (
-              <div className='flex items-center gap-1.5'>
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
-                  style={{ animationDelay: '0ms' }}
-                />
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
-                  style={{ animationDelay: '150ms' }}
-                />
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
-                  style={{ animationDelay: '300ms' }}
-                />
-              </div>
-            ) : (
-              <img
-                src='/assets/icons/mic-white.svg'
-                alt=''
-                className='w-9 h-9'
-              />
-            )}
-          </span>
+      {/* Header — curved bottom edge, matches app shell */}
+      <div className='bg-gradient-to-br from-sage to-forest px-5 pt-5 pb-7 shrink-0 rounded-b-[32px] shadow-[0_10px_28px_-10px_rgba(0,0,0,0.18)]'>
+        <div className='flex items-center justify-between'>
+          <button
+            onClick={handleCancel}
+            className='w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors'
+          >
+            <img
+              src='/assets/icons/arrow-left.svg'
+              alt='back'
+              className='w-5 h-5 brightness-0 invert'
+            />
+          </button>
+          <span className='text-white font-semibold text-[16px]'>Voice Note</span>
+          <div className='w-9 h-9' />
         </div>
-
-        <p className='text-[16px] font-bold text-gray-900'>
-          {finishing ? 'Processing...' : formatTime(seconds)}
-        </p>
       </div>
 
-      <div className='flex items-center justify-center gap-10 py-4'>
-        <button
-          onClick={handleConfirm}
-          disabled={finishing}
-          className='w-14 h-14 rounded-full bg-forest flex items-center justify-center disabled:opacity-60'
-        >
-          <img
-            src='/assets/icons/check.svg'
-            alt='confirm'
-            className='w-6 h-6'
-          />
-        </button>
+      <div className='flex-1 px-6 flex flex-col justify-center'>
+        <div className='flex flex-col items-center justify-center py-4'>
+          <div className='relative w-[140px] h-[140px] flex items-center justify-center mb-4'>
+            {recording && (
+              <span className='absolute inset-0 rounded-full bg-sage/40 animate-ping' />
+            )}
 
-        <button
-          onClick={handleCancel}
-          disabled={finishing}
-          className='w-14 h-14 rounded-full bg-sage flex items-center justify-center disabled:opacity-60'
-        >
-          <img src='/assets/icons/close.svg' alt='cancel' className='w-5 h-5' />
-        </button>
+            <span className='absolute inset-3 rounded-full bg-sage/60' />
+
+            <span className='absolute inset-7 rounded-full bg-forest flex items-center justify-center'>
+              {finishing ? (
+                <div className='flex items-center gap-1.5'>
+                  <span
+                    className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
+                    style={{ animationDelay: '0ms' }}
+                  />
+                  <span
+                    className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
+                    style={{ animationDelay: '150ms' }}
+                  />
+                  <span
+                    className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
+                    style={{ animationDelay: '300ms' }}
+                  />
+                </div>
+              ) : (
+                <img
+                  src='/assets/icons/mic-white.svg'
+                  alt=''
+                  className='w-9 h-9'
+                />
+              )}
+            </span>
+          </div>
+
+          <p className='text-[16px] font-bold text-gray-900'>
+            {finishing ? 'Processing...' : formatTime(seconds)}
+          </p>
+        </div>
+
+        <div className='flex items-center justify-center gap-10 py-4'>
+          <button
+            onClick={handleConfirm}
+            disabled={finishing}
+            className='w-14 h-14 rounded-full bg-forest flex items-center justify-center disabled:opacity-60 active:scale-95 transition-transform'
+          >
+            <img
+              src='/assets/icons/check.svg'
+              alt='confirm'
+              className='w-6 h-6'
+            />
+          </button>
+
+          <button
+            onClick={handleCancel}
+            disabled={finishing}
+            className='w-14 h-14 rounded-full bg-sage flex items-center justify-center disabled:opacity-60 active:scale-95 transition-transform'
+          >
+            <img src='/assets/icons/close.svg' alt='cancel' className='w-5 h-5' />
+          </button>
+        </div>
       </div>
     </div>
   );

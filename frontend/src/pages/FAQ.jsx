@@ -33,10 +33,7 @@ const CARD_SHADOW = 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] ring-1 ring-black
 function FAQItem({ item, isOpen, onToggle }) {
   return (
     <div className={`bg-white rounded-2xl overflow-hidden transition-shadow ${CARD_SHADOW}`}>
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left"
-      >
+      <button onClick={onToggle} className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left active:bg-sage/5 transition-colors">
         <span className={`text-[13.5px] font-semibold ${isOpen ? 'text-forest' : 'text-gray-900'}`}>
           {item.q}
         </span>
@@ -62,15 +59,16 @@ export default function FAQ() {
   const [openIndex, setOpenIndex] = useState(null);
 
   function toggle(i) {
-    setOpenIndex(openIndex === i ? null : i);
+    setOpenIndex((prev) => (prev === i ? null : i));
   }
 
   return (
     <div className="max-w-[480px] mx-auto min-h-screen bg-bg flex flex-col">
 
-      <div className="bg-sage flex items-center justify-between px-5 h-14 shrink-0 shadow-sm sticky top-0 z-10">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-sage to-forest flex items-center justify-between px-5 h-16 shrink-0 rounded-b-[28px] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.15)] sticky top-0 z-10">
         <button onClick={() => navigate('/help-support')} className="w-9 h-9 flex items-center justify-center -ml-1.5 rounded-full active:bg-white/10 transition-colors">
-          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5" />
+          <img src="/assets/icons/arrow-left.svg" alt="back" className="w-5 h-5 brightness-0 invert" />
         </button>
         <span className="text-white font-semibold text-[16px]">FAQ</span>
         <div className="w-9 h-9" />
@@ -83,12 +81,7 @@ export default function FAQ() {
 
         <div className="flex flex-col gap-2.5">
           {FAQS.map((item, i) => (
-            <FAQItem
-              key={i}
-              item={item}
-              isOpen={openIndex === i}
-              onToggle={() => toggle(i)}
-            />
+            <FAQItem key={i} item={item} isOpen={openIndex === i} onToggle={() => toggle(i)} />
           ))}
         </div>
       </div>
