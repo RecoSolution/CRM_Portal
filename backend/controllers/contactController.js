@@ -3,10 +3,10 @@ import asyncHandler from '../utils/asyncHandler.js';
 import { applyRoleScope, applyContactScope } from '../utils/authScope.js';
 import Task from '../models/Task.js';
 import ExcelJS from 'exceljs';
+import { upsertContactInBigin } from '../utils/zoho.js';
+
 // ────────────────────────────────────────────────────────
-// @route   GET /api/contacts
-// @desc    Get all contacts for logged in user
-// @access  Private
+// GET /api/contacts
 // ────────────────────────────────────────────────────────
 const getContacts = asyncHandler(async (req, res) => {
   const {
@@ -20,7 +20,6 @@ const getContacts = asyncHandler(async (req, res) => {
     limit = 20,
   } = req.query;
 
-  // Founder: sees all contacts. Employee: assigned to them OR unassigned-but-owned.
   const query = applyContactScope(req);
 
   if (type) query.relationshipType = type;
@@ -29,9 +28,8 @@ const getContacts = asyncHandler(async (req, res) => {
   if (stage) query.currentStage = stage;
   if (assignedTo) query.assignedTo = assignedTo;
 
-  // Text search
   if (search) {
-    const regex = new RegExp(search, 'i'); // case-insensitive partial match
+    const regex = new RegExp(search, 'i');
     query.$or = [
       { name: regex },
       { company: regex },
@@ -64,7 +62,7 @@ const getContacts = asyncHandler(async (req, res) => {
     const taskByContact = {};
     openTasks.forEach((t) => {
       const key = t.contact.toString();
-      if (!taskByContact[key]) taskByContact[key] = t; // earliest due wins
+      if (!taskByContact[key]) taskByContact[key] = t;
     });
 
     const LABEL_MAP = {
@@ -83,7 +81,7 @@ const getContacts = asyncHandler(async (req, res) => {
       obj.openTaskId = openTask ? openTask._id : null;
       return obj;
     });
-  } // ← closes the `if (req.query.includeTaskStatus === 'true')` block
+  }
 
   res.json({
     success: true,
@@ -94,11 +92,8 @@ const getContacts = asyncHandler(async (req, res) => {
   });
 });
 
-
 // ────────────────────────────────────────────────────────
-// @route   GET /api/contacts/:id
-// @desc    Get single contact
-// @access  Private
+// GET /api/contacts/:id
 // ────────────────────────────────────────────────────────
 const getContact = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({
@@ -110,24 +105,18 @@ const getContact = asyncHandler(async (req, res) => {
     .populate('collectedBy', 'firstName lastName email');
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
   res.json({ success: true, contact });
 });
 
 // ────────────────────────────────────────────────────────
-// @route   GET /api/contacts/export
-// @desc    Export contacts as CSV — scope/type/date filterable
-// @access  Private
+// GET /api/contacts/export
 // ────────────────────────────────────────────────────────
 const exportContacts = asyncHandler(async (req, res) => {
   const { scope = 'all', type, dateFrom, dateTo, format = 'csv', contactId } = req.query;
 
-  // Single-contact export bypasses scope/type/date filters entirely —
-  // still respects role visibility via applyContactScope underneath.
   if (contactId) {
     const scopedQuery = { _id: contactId, ...applyContactScope(req) };
     const contact = await Contact.findOne(scopedQuery)
@@ -141,15 +130,12 @@ const exportContacts = asyncHandler(async (req, res) => {
     return sendContactFile(res, [contact], format, contact.name || 'contact');
   }
 
-  // Base visibility always respects role — an Employee exporting
-  // "All Contacts" still only gets what they're allowed to see.
   let query = applyContactScope(req);
 
   if (scope === 'mine') {
     query = { assignedTo: req.user.id };
   }
   if (type) {
-    // NOTE: the schema field is `relationshipType`, not `type` — fixed here
     query = { ...query, relationshipType: type.toLowerCase() };
   }
   if (dateFrom || dateTo) {
@@ -163,43 +149,9 @@ const exportContacts = asyncHandler(async (req, res) => {
     .populate('assignedTo', 'firstName lastName')
     .populate('owner', 'firstName lastName');
 
-  const headers = [
-    'Name',
-    'Company',
-    'Designation',
-    'Email',
-    'Phone',
-    'Website',
-    'Address',
-    'Relationship Type',
-    'Category',
-    'Lead Score',
-    'Lead Category',
-    'Assigned To',
-    'Added By',
-    'Created At',
-  ];
-  const rows = contacts.map((c) => [
-    c.name || '',
-    c.company || '',
-    c.designation || '',
-    c.email || '',
-    c.phone || '',
-    c.website || '',
-    c.address || '',
-    c.relationshipType || '',
-    c.category || '',
-    c.leadScore ?? '',
-    c.leadCategory || '',
-    c.assignedTo ? `${c.assignedTo.firstName} ${c.assignedTo.lastName}` : '',
-    c.owner ? `${c.owner.firstName} ${c.owner.lastName}` : '',
-    c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-US') : '',
-  ]);
-
   return sendContactFile(res, contacts, format, 'contacts-export');
 });
 
-// ── Shared file-writer for both bulk and single-contact export ──
 async function sendContactFile(res, contacts, format, filenameBase) {
   const headers = [
     'Name', 'Company', 'Designation', 'Email', 'Phone', 'Website',
@@ -250,9 +202,7 @@ async function sendContactFile(res, contacts, format, filenameBase) {
 }
 
 // ────────────────────────────────────────────────────────
-// @route   GET /api/contacts/check-duplicate
-// @desc    Check if a contact with this email or phone already exists
-// @access  Private
+// GET /api/contacts/check-duplicate
 // ────────────────────────────────────────────────────────
 const checkDuplicate = asyncHandler(async (req, res) => {
   const { email, phone } = req.query;
@@ -274,9 +224,7 @@ const checkDuplicate = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// @route   POST /api/contacts
-// @desc    Create contact manually
-// @access  Private
+// POST /api/contacts
 // ────────────────────────────────────────────────────────
 const createContact = asyncHandler(async (req, res) => {
   const contact = await Contact.create({
@@ -286,12 +234,16 @@ const createContact = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({ success: true, contact });
+
+  // Sync to Zoho Bigin — fire-and-forget so a Bigin outage or slow
+  // response never blocks or fails the contact save itself.
+  upsertContactInBigin(contact).catch((err) => {
+    console.error('Zoho Bigin sync failed (create) for contact', contact._id, err.response?.data || err.message);
+  });
 });
 
 // ────────────────────────────────────────────────────────
-// @route   POST /api/contacts/:id/merge
-// @desc    Merge new scan data into an existing contact (duplicate found)
-// @access  Private
+// POST /api/contacts/:id/merge
 // ────────────────────────────────────────────────────────
 const mergeContact = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({
@@ -300,21 +252,10 @@ const mergeContact = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
-  const fields = [
-    'name',
-    'company',
-    'designation',
-    'email',
-    'phone',
-    'website',
-    'address',
-    'event',
-  ];
+  const fields = ['name', 'company', 'designation', 'email', 'phone', 'website', 'address', 'event'];
   fields.forEach((field) => {
     if (req.body[field]) contact[field] = req.body[field];
   });
@@ -329,23 +270,23 @@ const mergeContact = asyncHandler(async (req, res) => {
 
   await contact.save();
   res.json({ success: true, contact });
+
+  upsertContactInBigin(contact).catch((err) => {
+    console.error('Zoho Bigin sync failed (merge) for contact', contact._id, err.response?.data || err.message);
+  });
 });
 
 // ────────────────────────────────────────────────────────
-// @route   PUT /api/contacts/:id
-// @desc    Update contact
-// @access  Private
+// PUT /api/contacts/:id
 // ────────────────────────────────────────────────────────
 const updateContact = asyncHandler(async (req, res) => {
-  const contact = await Contact.findOne({
+  let contact = await Contact.findOne({
     _id: req.params.id,
     ...applyContactScope(req),
   });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
   contact = await Contact.findByIdAndUpdate(req.params.id, req.body, {
@@ -354,12 +295,14 @@ const updateContact = asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, contact });
+
+  upsertContactInBigin(contact).catch((err) => {
+    console.error('Zoho Bigin sync failed (update) for contact', contact._id, err.response?.data || err.message);
+  });
 });
 
 // ────────────────────────────────────────────────────────
-// @route   DELETE /api/contacts/:id
-// @desc    Delete contact
-// @access  Private
+// DELETE /api/contacts/:id
 // ────────────────────────────────────────────────────────
 const deleteContact = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({
@@ -368,9 +311,7 @@ const deleteContact = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
   await contact.deleteOne();
@@ -379,9 +320,7 @@ const deleteContact = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// @route   POST /api/contacts/:id/notes
-// @desc    Add note to contact
-// @access  Private
+// POST /api/contacts/:id/notes
 // ────────────────────────────────────────────────────────
 const addNote = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({
@@ -390,9 +329,7 @@ const addNote = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
   contact.notes.push({
@@ -406,10 +343,7 @@ const addNote = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// @route   POST /api/contacts/:id/reminders
-// @desc    Add reminder to contact
-// @access  Private
-// Body: { task, dueDate, time, priority, note }
+// POST /api/contacts/:id/reminders
 // ────────────────────────────────────────────────────────
 const addReminder = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({
@@ -418,15 +352,11 @@ const addReminder = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
   if (!req.body.dueDate) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'Due date is required.' });
+    return res.status(400).json({ success: false, message: 'Due date is required.' });
   }
 
   contact.reminders.push({
@@ -440,12 +370,8 @@ const addReminder = asyncHandler(async (req, res) => {
 
   await contact.save();
 
-  // Return just the newly created reminder (last item in array)
   const newReminder = contact.reminders[contact.reminders.length - 1];
 
-  // ── Bridge into the Task system so it shows up in Tasks/Home ──
-  // "Set Reminder" (scan flow) previously only wrote to Contact.reminders,
-  // which the new Task-based Tasks page/Home dashboard never reads.
   const TASK_TYPE_MAP = {
     call: 'Follow-Up Call',
     send_quotation: 'Send Quotation',
@@ -463,12 +389,12 @@ const addReminder = asyncHandler(async (req, res) => {
   else if (due < now) computedStatus = 'Overdue';
 
   await Task.create({
-    title: `${(req.body.task || 'follow_up').replace(/_/g, ' ')} — ${contact.name}`,
+    title: `${(req.body.task || 'follow_up').replace(/_/g, ' ')} - ${contact.name}`,
     description: req.body.note || '',
     priority: PRIORITY_MAP[req.body.priority] || 'Medium',
     taskType: TASK_TYPE_MAP[req.body.task] || 'Other',
     status: computedStatus,
-    assignedEmployee: req.user.id, // self-assigned reminder
+    assignedEmployee: req.user.id,
     createdBy: req.user.id,
     contact: contact._id,
     dueDate: req.body.dueDate,
@@ -490,9 +416,7 @@ const addReminder = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// @route   GET /api/contacts/reminders/today
-// @desc    Get all reminders due today for logged in user
-// @access  Private
+// GET /api/contacts/reminders/today
 // ────────────────────────────────────────────────────────
 const getTodayReminders = asyncHandler(async (req, res) => {
   const startOfDay = new Date();
@@ -510,14 +434,7 @@ const getTodayReminders = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// @route   GET /api/contacts/reminders/all?filter=today|upcoming|overdue|done
-// @desc    Get reminders for the Follow-up page tabs
-// @access  Private
-// ────────────────────────────────────────────────────────
-// ────────────────────────────────────────────────────────
-// @route   GET /api/contacts/reminders/all?filter=today|upcoming|overdue|completed
-// @desc    Get reminders across all contacts, filtered by status/date
-// @access  Private
+// GET /api/contacts/reminders/all
 // ────────────────────────────────────────────────────────
 const getAllReminders = asyncHandler(async (req, res) => {
   const { filter = 'today' } = req.query;
@@ -527,7 +444,6 @@ const getAllReminders = asyncHandler(async (req, res) => {
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
-  const now = new Date();
 
   const contacts = await Contact.find({
     owner: userId,
@@ -552,27 +468,18 @@ const getAllReminders = asyncHandler(async (req, res) => {
     });
   });
 
-  // Apply filter
   if (filter === 'today') {
     flattened = flattened.filter(
-      (r) =>
-        r.status === 'pending' &&
-        new Date(r.dueDate) >= startOfDay &&
-        new Date(r.dueDate) <= endOfDay,
+      (r) => r.status === 'pending' && new Date(r.dueDate) >= startOfDay && new Date(r.dueDate) <= endOfDay,
     );
   } else if (filter === 'upcoming') {
-    flattened = flattened.filter(
-      (r) => r.status === 'pending' && new Date(r.dueDate) > endOfDay,
-    );
+    flattened = flattened.filter((r) => r.status === 'pending' && new Date(r.dueDate) > endOfDay);
   } else if (filter === 'overdue') {
-    flattened = flattened.filter(
-      (r) => r.status === 'pending' && new Date(r.dueDate) < startOfDay,
-    );
+    flattened = flattened.filter((r) => r.status === 'pending' && new Date(r.dueDate) < startOfDay);
   } else if (filter === 'completed') {
     flattened = flattened.filter((r) => r.status === 'done');
   }
 
-  // Sort: high priority first, then soonest due date
   const priorityRank = { high: 0, medium: 1, low: 2 };
   flattened.sort((a, b) => {
     const pa = priorityRank[a.priority] ?? 3;
@@ -585,10 +492,7 @@ const getAllReminders = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// @route   PUT /api/contacts/:id/reminders/:reminderId
-// @desc    Update a reminder — status (done/snoozed/pending) and/or
-//          edit its task, dueDate, time, priority, note
-// @access  Private
+// PUT /api/contacts/:id/reminders/:reminderId
 // ────────────────────────────────────────────────────────
 const updateReminderStatus = asyncHandler(async (req, res) => {
   const contact = await Contact.findOne({
@@ -597,29 +501,22 @@ const updateReminderStatus = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Contact not found.' });
+    return res.status(404).json({ success: false, message: 'Contact not found.' });
   }
 
   const reminder = contact.reminders.id(req.params.reminderId);
   if (!reminder) {
-    return res
-      .status(404)
-      .json({ success: false, message: 'Reminder not found.' });
+    return res.status(404).json({ success: false, message: 'Reminder not found.' });
   }
 
-  // Status update (mark done / snoozed / pending)
   if (req.body.status) {
     reminder.status = req.body.status;
   }
 
-  // Snoozing to a new date
   if (req.body.status === 'snoozed' && req.body.newDueDate) {
     reminder.dueDate = req.body.newDueDate;
   }
 
-  // Allow editing reminder details directly
   const editableFields = ['task', 'dueDate', 'time', 'priority', 'note'];
   editableFields.forEach((field) => {
     if (req.body[field] !== undefined) reminder[field] = req.body[field];
