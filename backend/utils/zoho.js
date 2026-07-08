@@ -20,6 +20,26 @@ export async function getZohoAccessToken() {
   return cachedToken;
 }
 
+function buildNotesDescription(contact) {
+  if (!contact.notes || contact.notes.length === 0) return undefined;
+
+  // Newest note first, each one dated so multiple notes stay readable
+  // as a single Description field in Bigin.
+  const sorted = [...contact.notes].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+  );
+
+  return sorted
+    .filter((n) => n.content && n.content.trim())
+    .map((n) => {
+      const date = n.createdAt
+        ? new Date(n.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+        : '';
+      return date ? `[${date}] ${n.content}` : n.content;
+    })
+    .join('\n\n');
+}
+
 export async function upsertContactInBigin(contact) {
   const token = await getZohoAccessToken();
 
@@ -31,11 +51,10 @@ export async function upsertContactInBigin(contact) {
         Email: contact.email,
         Phone: contact.phone,
         Title: contact.designation,
-        // Account_Name is a lookup — sending { name } auto-creates the
-        // company in Bigin's Companies module if it doesn't exist yet.
         Account_Name: contact.company ? { name: contact.company } : undefined,
         Mailing_Street: contact.address || undefined,
         Website: contact.website || undefined,
+        Description: buildNotesDescription(contact),
         Mongo_Contact_Id: contact._id.toString(),
       },
     ],
