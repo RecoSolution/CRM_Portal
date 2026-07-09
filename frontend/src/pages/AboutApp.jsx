@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 
-const APP_VERSION = '2.3.7';
+const APP_VERSION = '3.0.0';
 
 const CARD_SHADOW = 'shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03]';
 
