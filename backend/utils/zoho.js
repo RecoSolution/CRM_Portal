@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getZohoOwnerId } from './zohoOwnerMap.js';
 
 let cachedToken = null;
 let tokenExpiry = 0;
@@ -23,8 +24,6 @@ export async function getZohoAccessToken() {
 function buildNotesDescription(contact) {
   if (!contact.notes || contact.notes.length === 0) return undefined;
 
-  // Newest note first, each one dated so multiple notes stay readable
-  // as a single Description field in Bigin.
   const sorted = [...contact.notes].sort(
     (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
   );
@@ -40,8 +39,23 @@ function buildNotesDescription(contact) {
     .join('\n\n');
 }
 
+// Forces the Owner on a Bigin record via a plain Update call. Needed
+// because Bigin's insert-time assignment rule overrides any Owner sent
+// during upsert's insert leg — Owner only reliably sticks on Update.
+async function forceOwnerOnRecord(recordId, ownerId, token) {
+  await axios.put(
+    `${process.env.ZOHO_API_DOMAIN}/bigin/v2/Contacts`,
+    { data: [{ id: recordId, Owner: { id: ownerId } }] },
+    { headers: { Authorization: `Zoho-oauthtoken ${token}` } },
+  );
+}
+
 export async function upsertContactInBigin(contact) {
   const token = await getZohoAccessToken();
+
+  console.log('DEBUG collectedBy:', contact.collectedBy); // temp
+  const zohoOwnerId = getZohoOwnerId(contact.collectedBy?.email);
+  console.log('DEBUG resolved zohoOwnerId:', zohoOwnerId); // temp
 
   const payload = {
     data: [
@@ -55,6 +69,7 @@ export async function upsertContactInBigin(contact) {
         Mailing_Street: contact.address || undefined,
         Website: contact.website || undefined,
         Description: buildNotesDescription(contact),
+        Owner: zohoOwnerId ? { id: zohoOwnerId } : undefined,
         Mongo_Contact_Id: contact._id.toString(),
       },
     ],
@@ -66,5 +81,24 @@ export async function upsertContactInBigin(contact) {
     { headers: { Authorization: `Zoho-oauthtoken ${token}` } },
   );
 
-  return res.data.data[0];
+  const result = res.data.data[0];
+  console.log('DEBUG upsert result:', JSON.stringify(result, null, 2)); // temp
+
+  if (zohoOwnerId && result?.details?.id) {
+    console.log('DEBUG attempting to force owner on record:', result.details.id); // temp
+    try {
+      await forceOwnerOnRecord(result.details.id, zohoOwnerId, token);
+      console.log('DEBUG force-owner call succeeded'); // temp
+    } catch (err) {
+      console.error(
+        'Failed to force Owner on Bigin record',
+        result.details.id,
+        JSON.stringify(err.response?.data || err.message, null, 2), // fuller detail
+      );
+    }
+  } else {
+    console.log('DEBUG skipped force-owner — zohoOwnerId or record id missing', { zohoOwnerId, resultId: result?.details?.id }); // temp
+  }
+
+  return result;
 }

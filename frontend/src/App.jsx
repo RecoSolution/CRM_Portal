@@ -41,6 +41,8 @@ import ContactSupport from './pages/ContactSupport';
 import ReportIssue from './pages/ReportIssue';
 import AboutApp from './pages/AboutApp';
 import Analytics from './pages/Analytics';
+import ManualContactForm from './pages/ManualContactForm';
+
 
 function Gate({ children }) {
   const { user, loading } = useAuth();
@@ -354,6 +356,7 @@ export default function App() {
               </Gate>
             }
           />
+          <Route path="/contacts/new" element={<ManualContactForm />} />
 
           <Route path='*' element={<Navigate to='/login' replace />} />
         </Routes>

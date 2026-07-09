@@ -105,7 +105,9 @@ const getContact = asyncHandler(async (req, res) => {
     .populate('collectedBy', 'firstName lastName email');
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   res.json({ success: true, contact });
@@ -115,7 +117,14 @@ const getContact = asyncHandler(async (req, res) => {
 // GET /api/contacts/export
 // ────────────────────────────────────────────────────────
 const exportContacts = asyncHandler(async (req, res) => {
-  const { scope = 'all', type, dateFrom, dateTo, format = 'csv', contactId } = req.query;
+  const {
+    scope = 'all',
+    type,
+    dateFrom,
+    dateTo,
+    format = 'csv',
+    contactId,
+  } = req.query;
 
   if (contactId) {
     const scopedQuery = { _id: contactId, ...applyContactScope(req) };
@@ -124,7 +133,9 @@ const exportContacts = asyncHandler(async (req, res) => {
       .populate('owner', 'firstName lastName');
 
     if (!contact) {
-      return res.status(404).json({ success: false, message: 'Contact not found.' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Contact not found.' });
     }
 
     return sendContactFile(res, [contact], format, contact.name || 'contact');
@@ -154,9 +165,20 @@ const exportContacts = asyncHandler(async (req, res) => {
 
 async function sendContactFile(res, contacts, format, filenameBase) {
   const headers = [
-    'Name', 'Company', 'Designation', 'Email', 'Phone', 'Website',
-    'Address', 'Relationship Type', 'Category', 'Lead Score',
-    'Lead Category', 'Assigned To', 'Added By', 'Created At',
+    'Name',
+    'Company',
+    'Designation',
+    'Email',
+    'Phone',
+    'Website',
+    'Address',
+    'Relationship Type',
+    'Category',
+    'Lead Score',
+    'Lead Category',
+    'Assigned To',
+    'Added By',
+    'Created At',
   ];
   const rows = contacts.map((c) => [
     c.name || '',
@@ -175,7 +197,8 @@ async function sendContactFile(res, contacts, format, filenameBase) {
     c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-US') : '',
   ]);
 
-  const safeName = filenameBase.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'contact';
+  const safeName =
+    filenameBase.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'contact';
 
   if (format === 'xlsx') {
     const workbook = new ExcelJS.Workbook();
@@ -188,16 +211,24 @@ async function sendContactFile(res, contacts, format, filenameBase) {
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeName}.xlsx"`,
+    );
     await workbook.xlsx.write(res);
     return res.end();
   }
 
   const escapeCell = (val) => `"${String(val).replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(',')).join('\n');
+  const csv = [headers, ...rows]
+    .map((row) => row.map(escapeCell).join(','))
+    .join('\n');
 
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="${safeName}.csv"`);
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${safeName}.csv"`,
+  );
   res.status(200).send(csv);
 }
 
@@ -227,19 +258,33 @@ const checkDuplicate = asyncHandler(async (req, res) => {
 // POST /api/contacts
 // ────────────────────────────────────────────────────────
 const createContact = asyncHandler(async (req, res) => {
+  // Only a founder is allowed to pick who collected it; anyone else
+  // (employees) always gets attributed to themselves regardless of
+  // what the request body says, so this can't be spoofed.
+  const collectedById =
+    req.user.role === 'founder' && req.body.collectedBy
+      ? req.body.collectedBy
+      : req.user.id;
+
   const contact = await Contact.create({
     ...req.body,
     owner: req.user.id,
-    collectedBy: req.user.id,
+    collectedBy: collectedById,
   });
+
+  // populate collectedBy's email so upsertContactInBigin can resolve
+  // the right Zoho owner
+  await contact.populate('collectedBy', 'email');
 
   res.status(201).json({ success: true, contact });
 
-  // Sync to Zoho Bigin — fire-and-forget so a Bigin outage or slow
-  // response never blocks or fails the contact save itself.
   upsertContactInBigin(contact).catch((err) => {
-    console.error('Zoho Bigin sync failed (create) for contact', contact._id, err.response?.data || err.message);
-  });
+  console.error(
+    'Zoho Bigin sync failed (create) for contact',
+    contact._id,
+    JSON.stringify(err.response?.data || err.message, null, 2),
+  );
+});
 });
 
 // ────────────────────────────────────────────────────────
@@ -252,10 +297,21 @@ const mergeContact = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
-  const fields = ['name', 'company', 'designation', 'email', 'phone', 'website', 'address', 'event'];
+  const fields = [
+    'name',
+    'company',
+    'designation',
+    'email',
+    'phone',
+    'website',
+    'address',
+    'event',
+  ];
   fields.forEach((field) => {
     if (req.body[field]) contact[field] = req.body[field];
   });
@@ -272,7 +328,11 @@ const mergeContact = asyncHandler(async (req, res) => {
   res.json({ success: true, contact });
 
   upsertContactInBigin(contact).catch((err) => {
-    console.error('Zoho Bigin sync failed (merge) for contact', contact._id, err.response?.data || err.message);
+    console.error(
+      'Zoho Bigin sync failed (merge) for contact',
+      contact._id,
+      err.response?.data || err.message,
+    );
   });
 });
 
@@ -286,18 +346,24 @@ const updateContact = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   contact = await Contact.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
-  });
+  }).populate('collectedBy', 'email');
 
   res.json({ success: true, contact });
 
   upsertContactInBigin(contact).catch((err) => {
-    console.error('Zoho Bigin sync failed (update) for contact', contact._id, err.response?.data || err.message);
+    console.error(
+      'Zoho Bigin sync failed (update) for contact',
+      contact._id,
+      err.response?.data || err.message,
+    );
   });
 });
 
@@ -311,7 +377,9 @@ const deleteContact = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   await contact.deleteOne();
@@ -329,7 +397,9 @@ const addNote = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   contact.notes.push({
@@ -352,11 +422,15 @@ const addReminder = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   if (!req.body.dueDate) {
-    return res.status(400).json({ success: false, message: 'Due date is required.' });
+    return res
+      .status(400)
+      .json({ success: false, message: 'Due date is required.' });
   }
 
   contact.reminders.push({
@@ -470,12 +544,19 @@ const getAllReminders = asyncHandler(async (req, res) => {
 
   if (filter === 'today') {
     flattened = flattened.filter(
-      (r) => r.status === 'pending' && new Date(r.dueDate) >= startOfDay && new Date(r.dueDate) <= endOfDay,
+      (r) =>
+        r.status === 'pending' &&
+        new Date(r.dueDate) >= startOfDay &&
+        new Date(r.dueDate) <= endOfDay,
     );
   } else if (filter === 'upcoming') {
-    flattened = flattened.filter((r) => r.status === 'pending' && new Date(r.dueDate) > endOfDay);
+    flattened = flattened.filter(
+      (r) => r.status === 'pending' && new Date(r.dueDate) > endOfDay,
+    );
   } else if (filter === 'overdue') {
-    flattened = flattened.filter((r) => r.status === 'pending' && new Date(r.dueDate) < startOfDay);
+    flattened = flattened.filter(
+      (r) => r.status === 'pending' && new Date(r.dueDate) < startOfDay,
+    );
   } else if (filter === 'completed') {
     flattened = flattened.filter((r) => r.status === 'done');
   }
@@ -501,12 +582,16 @@ const updateReminderStatus = asyncHandler(async (req, res) => {
   });
 
   if (!contact) {
-    return res.status(404).json({ success: false, message: 'Contact not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Contact not found.' });
   }
 
   const reminder = contact.reminders.id(req.params.reminderId);
   if (!reminder) {
-    return res.status(404).json({ success: false, message: 'Reminder not found.' });
+    return res
+      .status(404)
+      .json({ success: false, message: 'Reminder not found.' });
   }
 
   if (req.body.status) {

@@ -46,12 +46,14 @@ function Header({ onBack }) {
   );
 }
 
-export default function ScannedCardForm() {
+// Manual entry uses the same draft store as the scan flow — needed so
+// the "Voice Note" and "Set Reminder" sub-pages (which write into
+// scanDraftStore) can round-trip back into this form the same way they
+// do for the scanned flow. Cleared on mount so a leftover scan draft
+// never bleeds into a fresh manual entry, and cleared again on save.
+export default function ManualContactForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
-
-  const [capturedImage] = useState(() => getDraft().imageData);
-  const [cardImageUrl, setCardImageUrl] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -63,49 +65,34 @@ export default function ScannedCardForm() {
     website: '',
     address: '',
   });
-  const [relationType, setRelationType] = useState(
-    () => getDraft().relationType || '',
-  );
-  const [contactSource, setContactSource] = useState(
-    () => getDraft().contactSource || '',
-  );
+  const [relationType, setRelationType] = useState('');
+  const [contactSource, setContactSource] = useState('');
 
-  // Founder-only "collected by" selector. Stores the selected founder's
-  // user _id (not a free-text name) so the backend can attribute the
-  // contact correctly. The dropdown only renders once `founders` loads,
-  // and its default is corrected inside loadFounders() below so the
-  // visible selection always matches real state — even when logged in
-  // as a test account that isn't one of the two authorized founders.
-  const [collectedBy, setCollectedBy] = useState(
-    () => getDraft().collectedBy || '',
-  );
+  const [collectedBy, setCollectedBy] = useState('');
   const [founders, setFounders] = useState([]);
 
-  const [notes, setNotes] = useState(() => getDraft().notes || '');
-
-  const [voiceBlob, setVoiceBlob] = useState(
-    () => getDraft().voiceBlob || null,
-  );
-  const [reminder, setReminder] = useState(() => getDraft().reminder || null);
-  const [extracting, setExtracting] = useState(true);
+  const [notes, setNotes] = useState('');
+  const [voiceBlob, setVoiceBlob] = useState(null);
+  const [reminder, setReminder] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [rawText, setRawText] = useState('');
-  const [showRawText, setShowRawText] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [voiceAudioUrl, setVoiceAudioUrl] = useState(null);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const audioRef = useRef(null);
 
-  // ── Consume voice transcript - runs on EVERY render, no deps array.
-  //    This guarantees it can never be missed due to remount/effect-timing
-  //    issues. It's safe to run every render because it checks for a
-  //    non-empty value and immediately clears it from the draft after
-  //    consuming, so it only ever fires its body once per actual recording. ──
+  // Fresh draft on entering this page — this is a brand-new manual
+  // contact, not a continuation of any prior scan session.
+  useEffect(() => {
+    clearDraft();
+  }, []);
+
+  // ── Consume voice transcript / voiceBlob / reminder coming back from
+  //    their respective sub-pages, same pattern as the scanned form. ──
   const draftNow = getDraft();
   if (draftNow.voiceTranscript) {
     const incoming = draftNow.voiceTranscript;
-    setDraft({ voiceTranscript: '' }); // consume immediately, before any async gap
+    setDraft({ voiceTranscript: '' });
 
     setNotes((prev) => {
       const merged = prev && prev.trim() ? `${prev}\n${incoming}` : incoming;
@@ -131,12 +118,6 @@ export default function ScannedCardForm() {
         );
         setFounders(list);
 
-        // If nothing's selected yet, or the current value doesn't match
-        // any actual founder in the list (e.g. logged in as a test
-        // account not in AUTHORIZED_FOUNDER_EMAILS), default to whichever
-        // founder matches the logged-in user, falling back to the first
-        // founder in the list — so the dropdown's visible selection
-        // always matches real state, never a mismatched phantom default.
         setCollectedBy((prev) => {
           if (list.some((f) => f._id === prev)) return prev;
           const matchingSelf = list.find((f) => f._id === user?._id);
@@ -149,110 +130,6 @@ export default function ScannedCardForm() {
     loadFounders();
   }, []);
 
-  // ── Run OCR + extraction ONCE per scan ──
-  useEffect(() => {
-    const d = getDraft();
-
-    if (d.extractedContact) {
-      setForm(d.extractedContact);
-      setCardImageUrl(d.cardImageUrl || '');
-      setExtracting(false);
-      return;
-    }
-
-    if (!capturedImage) {
-      setExtracting(false);
-      return;
-    }
-
-    async function extract() {
-      try {
-        const blob = await (await fetch(capturedImage)).blob();
-        const formData = new FormData();
-        formData.append('card', blob, 'card.jpg');
-
-        const res = await api.post('/scan/ocr', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        setRawText(res.data.rawText || '');
-        setCardImageUrl(res.data.cardImageUrl || '');
-        setDraft({ cardImageUrl: res.data.cardImageUrl || '' });
-
-        const c = res.data.extractedContact;
-        const extracted = {
-          name: c.name || '',
-          jobTitle: c.designation || '',
-          company: c.company || '',
-          phone: c.phone || '',
-          phone2: c.phone2 || '',
-          email: c.email || '',
-          website: c.website || '',
-          address: c.address || '',
-        };
-
-        setForm(extracted);
-        setDraft({ extractedContact: extracted });
-      } catch (err) {
-        setError('Could not read card automatically. Please fill in manually.');
-      } finally {
-        setExtracting(false);
-      }
-    }
-    extract();
-  }, []);
-
-  // ── Handle back-side scan: OCR it separately, merge into existing form ──
-  useEffect(() => {
-    const d = getDraft();
-    if (!d.isBackSideScan || !d.backImageData) return;
-
-    async function extractBackSide() {
-      setExtracting(true);
-      try {
-        const blob = await (await fetch(d.backImageData)).blob();
-        const formData = new FormData();
-        formData.append('card', blob, 'card-back.jpg');
-
-        const res = await api.post('/scan/ocr', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        const c = res.data.extractedContact;
-
-        setForm((prev) => {
-          const merged = {
-            name: prev.name || c.name || '',
-            jobTitle: prev.jobTitle || c.designation || '',
-            company: prev.company || c.company || '',
-            phone: prev.phone || c.phone || '',
-            phone2: prev.phone2 || c.phone2 || '',
-            email: prev.email || c.email || '',
-            website: prev.website || c.website || '',
-            address: prev.address || c.address || '',
-          };
-          setDraft({ extractedContact: merged });
-          return merged;
-        });
-
-        setRawText((prev) =>
-          prev
-            ? `${prev}\n\n--- BACK SIDE ---\n${res.data.rawText || ''}`
-            : res.data.rawText || '',
-        );
-      } catch (err) {
-        setError(
-          'Could not read the back side automatically. You can fill in any missing fields manually.',
-        );
-      } finally {
-        setExtracting(false);
-        setDraft({ isBackSideScan: false, backImageData: null });
-      }
-    }
-
-    extractBackSide();
-  }, []);
-
   useEffect(() => {
     if (voiceBlob) {
       const url = URL.createObjectURL(voiceBlob);
@@ -263,18 +140,12 @@ export default function ScannedCardForm() {
     }
   }, [voiceBlob]);
 
-  // ── Keep draft in sync with live edits ──
-  useEffect(() => {
-    if (!extracting) {
-      setDraft({ extractedContact: form });
-    }
-  }, [form]);
-
+  // ── Keep draft in sync so Voice Note / Set Reminder sub-pages can
+  //    round-trip back into this same form state. ──
   useEffect(() => {
     setDraft({ relationType, contactSource, collectedBy });
   }, [relationType, contactSource, collectedBy]);
 
-  // Sync notes to draft on every manual edit too (typing in the textarea)
   useEffect(() => {
     setDraft({ notes });
   }, [notes]);
@@ -364,13 +235,7 @@ export default function ScannedCardForm() {
         address: form.address,
         relationshipType: relationType ? relationType.toLowerCase() : undefined,
         event: contactSource || undefined,
-        // No role gate here — the backend is the source of truth on
-        // whether this value is actually honored (only founders can
-        // override collectedBy server-side). Sending it whenever a
-        // founder was resolved keeps this in sync with whatever the
-        // dropdown visibly shows.
         collectedBy: collectedBy || undefined,
-        cardImageUrl: cardImageUrl || undefined,
         notes: notes
           ? [{ content: notes, type: voiceBlob ? 'voice' : 'text', audioUrl }]
           : [],
@@ -399,76 +264,6 @@ export default function ScannedCardForm() {
       <Header onBack={() => navigate('/home')} />
 
       <div className='flex-1 px-5 pt-5 pb-10'>
-        <div className='relative rounded-2xl overflow-hidden mb-4 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]'>
-          {capturedImage ? (
-            <img
-              src={capturedImage}
-              alt='Scanned card'
-              className='w-full h-auto object-contain'
-            />
-          ) : (
-            <div className='aspect-[16/9] flex items-center justify-center text-gray-400 text-[13px]'>
-              No image captured
-            </div>
-          )}
-          {extracting && (
-            <div className='absolute inset-0 bg-white/85 flex items-center justify-center gap-2.5'>
-              <div className='flex items-center gap-1.5'>
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-forest animate-bounce'
-                  style={{ animationDelay: '0ms' }}
-                />
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-sage animate-bounce'
-                  style={{ animationDelay: '150ms' }}
-                />
-                <span
-                  className='w-2.5 h-2.5 rounded-full bg-forest/60 animate-bounce'
-                  style={{ animationDelay: '300ms' }}
-                />
-              </div>
-              <span className='text-[13px] font-medium text-gray-700'>
-                Reading card...
-              </span>
-            </div>
-          )}
-        </div>
-
-        {rawText && (
-          <button
-            onClick={() => setShowRawText(!showRawText)}
-            className='text-[12px] text-forest font-medium mb-3'
-          >
-            {showRawText ? 'Hide' : 'Show'} raw scanned text (for verification)
-          </button>
-        )}
-        {showRawText && (
-          <pre className='text-[11px] text-gray-600 bg-white rounded-2xl p-3.5 mb-4 whitespace-pre-wrap shadow-[0_1px_3px_rgba(0,0,0,0.06)]'>
-            {rawText}
-          </pre>
-        )}
-
-        <div className='flex gap-3 mb-7'>
-          <button
-            onClick={() => navigate('/scan')}
-            className='flex-1 h-11 rounded-full bg-white text-gray-700 font-semibold text-[13px] flex items-center justify-center gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.06)] active:scale-[0.98] transition-transform'
-          >
-            <img src='/assets/icons/rescan.svg' alt='' className='w-4 h-4' />
-            Rescan
-          </button>
-          <button
-            onClick={() => navigate('/scan', { state: { backSide: true } })}
-            className='flex-1 h-11 rounded-full bg-forest text-white font-semibold text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform'
-          >
-            <img
-              src='/assets/icons/plus-circle.svg'
-              alt=''
-              className='w-4 h-4'
-            />
-            Capture Back Side
-          </button>
-        </div>
-
         {error && (
           <div className='bg-red-50 border border-red-200 text-red-600 text-[13px] rounded-2xl px-4 py-3 mb-5'>
             {error}
@@ -540,9 +335,6 @@ export default function ScannedCardForm() {
           </div>
         </div>
 
-        {/* Collected By — dropdown between the two authorized founders.
-            Renders whenever the founders list loaded successfully,
-            regardless of the logged-in user's role string. */}
         {founders.length > 0 && (
           <div className='mb-6'>
             <p className='text-[12px] font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1'>
@@ -668,7 +460,7 @@ export default function ScannedCardForm() {
 
         <button
           onClick={handleSave}
-          disabled={saving || extracting}
+          disabled={saving}
           className='w-full h-12 rounded-full font-semibold text-[15px] bg-forest text-white disabled:opacity-60 active:scale-[0.99] transition-transform'
         >
           {saving ? 'Saving...' : 'Save'}
